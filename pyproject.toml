@@ -1,0 +1,113 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "enterprise-drift-engine"
+version = "0.1.0"
+description = "Production-grade system drift detection, policy enforcement, risk scoring, and remediation platform."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Drift Engine Team" }]
+keywords = ["drift", "compliance", "infrastructure", "security", "remediation"]
+dependencies = [
+  "aiosqlite>=0.20.0",
+  "alembic>=1.13.2",
+  "apscheduler>=3.10.4",
+  "asyncpg>=0.30.0",
+  "cryptography>=43.0.0",
+  "elasticsearch[async]>=8.15.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.27.0",
+  "opentelemetry-api>=1.27.0",
+  "opentelemetry-sdk>=1.27.0",
+  "opentelemetry-instrumentation-fastapi>=0.48b0",
+  "prometheus-client>=0.21.0",
+  "pydantic>=2.9.0",
+  "pydantic-settings>=2.5.0",
+  "redis>=5.0.8",
+  "rich>=13.8.0",
+  "sqlalchemy[asyncio]>=2.0.35",
+  "structlog>=24.4.0",
+  "typer>=0.12.5",
+  "uvicorn[standard]>=0.30.6"
+]
+
+[project.optional-dependencies]
+aws = ["boto3>=1.35.0"]
+azure = ["azure-identity>=1.17.1", "azure-mgmt-resource>=23.1.1"]
+kubernetes = ["kubernetes>=30.1.0"]
+dev = [
+  "bandit[toml]>=1.7.10",
+  "httpx>=0.27.0",
+  "mypy>=1.11.2",
+  "pip-audit>=2.7.3",
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+  "pytest-cov>=5.0.0",
+  "ruff>=0.6.9"
+]
+
+[project.scripts]
+drift-engine = "drift_engine.cli.commands:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["drift_engine", "config"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers -p no:cacheprovider"
+filterwarnings = [
+  "ignore::DeprecationWarning:pytest_asyncio.*",
+  "ignore::DeprecationWarning:fastapi.routing",
+  "ignore::DeprecationWarning:starlette._utils"
+]
+
+[tool.coverage.run]
+branch = true
+source = ["config", "drift_engine"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 35
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+  ".pip-audit-cache",
+  ".ruff_cache",
+  "**/__pycache__",
+  "pytest-cache-files-*",
+  "tests/.tmp",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RUF"]
+ignore = ["S101", "S404", "S603", "S607"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+exclude = [
+  "pytest-cache-files-.*",
+  "tests/.tmp",
+  ".ruff_cache",
+]
+
+[[tool.mypy.overrides]]
+module = ["azure.*", "boto3"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".ruff_cache", "pytest-cache-files-*"]
+skips = ["B101", "B404", "B603", "B607"]

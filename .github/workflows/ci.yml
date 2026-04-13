@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: drift
+          POSTGRES_USER: drift
+          POSTGRES_PASSWORD: drift
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U drift -d drift"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DRIFT_DATABASE_URL: postgresql+asyncpg://drift:drift@localhost:5432/drift
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type check
+        run: mypy drift_engine config tests
+
+      - name: Test with coverage
+        run: pytest --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Migration check
+        run: alembic -c alembic/alembic.ini upgrade head
+
+      - name: Dependency audit
+        run: pip-audit .
+
+      - name: Static security scan
+        run: bandit -c pyproject.toml -r drift_engine config
+
+      - name: Docker build
+        run: docker build -t enterprise-drift-engine:ci .
+
+      - name: Container vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: enterprise-drift-engine:ci
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml

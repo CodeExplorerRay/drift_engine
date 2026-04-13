@@ -1,0 +1,73 @@
+services:
+  api:
+    build: .
+    image: enterprise-drift-engine:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      DRIFT_ENVIRONMENT: local
+      DRIFT_STORAGE_BACKEND: postgres
+      DRIFT_AUTO_CREATE_SCHEMA: "true"
+      DRIFT_DATABASE_URL: postgresql+asyncpg://drift:drift@postgres:5432/drift
+      DRIFT_REDIS_URL: redis://redis:6379/0
+      DRIFT_ELASTICSEARCH_URL: http://elasticsearch:9200
+      DRIFT_API_KEYS: local-dev-key
+      DRIFT_SERVICE_ACCOUNTS: '[{"id":"local-admin","key":"local-dev-key","scopes":["*"]}]'
+      DRIFT_AUTH_REQUIRED: "false"
+      DRIFT_SCHEDULER_ENABLED: "true"
+      DRIFT_LOG_LEVEL: INFO
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./baselines:/app/baselines:ro
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: drift
+      POSTGRES_USER: drift
+      POSTGRES_PASSWORD: drift
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drift -d drift"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.2
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+volumes:
+  postgres_data:
+  es_data:

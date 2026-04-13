@@ -1,0 +1,40 @@
+services:
+  api:
+    image: enterprise-drift-engine:${DRIFT_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DRIFT_ENVIRONMENT: production
+      DRIFT_STORAGE_BACKEND: postgres
+      DRIFT_AUTO_CREATE_SCHEMA: "false"
+      DRIFT_DATABASE_URL: postgresql+asyncpg://drift:${POSTGRES_PASSWORD}@postgres:5432/drift
+      DRIFT_SERVICE_ACCOUNTS: ${DRIFT_SERVICE_ACCOUNTS:?set scoped service accounts JSON}
+      DRIFT_BASELINE_SIGNING_SECRET: ${DRIFT_BASELINE_SIGNING_SECRET:?set signing secret}
+      DRIFT_AUTH_REQUIRED: "true"
+      DRIFT_REMEDIATION_ENABLED: ${DRIFT_REMEDIATION_ENABLED:-false}
+      DRIFT_REMEDIATION_DRY_RUN: ${DRIFT_REMEDIATION_DRY_RUN:-true}
+      DRIFT_SCHEDULER_ENABLED: ${DRIFT_SCHEDULER_ENABLED:-true}
+      DRIFT_SCHEDULER_OWNER_ID: ${HOSTNAME:-api}
+      DRIFT_LOG_LEVEL: ${DRIFT_LOG_LEVEL:-INFO}
+    ports:
+      - "${DRIFT_PORT:-8080}:8080"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: drift
+      POSTGRES_USER: drift
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set postgres password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drift -d drift"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

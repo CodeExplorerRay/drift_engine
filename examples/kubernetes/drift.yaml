@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-api
+  namespace: drift-demo
+  labels:
+    app: checkout-api
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: checkout-api
+  template:
+    metadata:
+      labels:
+        app: checkout-api
+    spec:
+      containers:
+        - name: checkout-api
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+          securityContext:
+            allowPrivilegeEscalation: true
+            privileged: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-api
+  namespace: drift-demo
+spec:
+  type: LoadBalancer
+  selector:
+    app: checkout-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
