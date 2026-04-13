@@ -1,6 +1,6 @@
 services:
   api:
-    image: enterprise-drift-engine:${DRIFT_IMAGE_TAG:-latest}
+    image: system-drift-engine:${DRIFT_IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       postgres:

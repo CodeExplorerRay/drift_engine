@@ -64,7 +64,7 @@ def create_app() -> FastAPI:
     configure_tracing(settings.service_name)
 
     app = FastAPI(
-        title="Enterprise System Drift Engine",
+        title="System Drift Engine",
         version=__version__,
         description=(
             "Continuous infrastructure drift detection, policy enforcement, " "and remediation."

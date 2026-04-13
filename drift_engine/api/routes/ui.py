@@ -11,7 +11,7 @@ UI_HTML = """
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Enterprise System Drift Engine</title>
+  <title>System Drift Engine</title>
   <style>
     :root {
       --ink: #17211b;

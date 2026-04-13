@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from drift_engine.core.models import SEVERITY_BASE_RISK, Baseline, DriftReport, StateSnapshot
 from drift_engine.policies.evaluator import PolicyEvaluator
 from drift_engine.policies.models import PolicyEvaluationResult, PolicyRule
-from drift_engine.policies.rules import default_enterprise_rules
+from drift_engine.policies.rules import default_policy_rules
 
 
 class PolicyEngine:
@@ -19,7 +19,7 @@ class PolicyEngine:
 
     @classmethod
     def default(cls) -> PolicyEngine:
-        return cls(default_enterprise_rules())
+        return cls(default_policy_rules())
 
     def add_rule(self, rule: PolicyRule) -> None:
         self.rules.append(rule)

@@ -72,7 +72,7 @@ def _aws_descriptor(settings: Settings, *, enabled: set[str]) -> IntegrationDesc
         enabled="aws" in enabled,
         status=status,
         resource_types=["security_groups", "s3_buckets"],
-        optional_dependencies=["enterprise-drift-engine[aws]", "boto3"],
+        optional_dependencies=["system-drift-engine[aws]", "boto3"],
         missing=missing,
         settings={
             "regions": settings.aws_region_values,
@@ -105,7 +105,7 @@ def _azure_descriptor(settings: Settings, *, enabled: set[str]) -> IntegrationDe
         enabled="azure" in enabled,
         status=status,
         resource_types=["resource_groups", "resources"],
-        optional_dependencies=["enterprise-drift-engine[azure]", "azure-identity"],
+        optional_dependencies=["system-drift-engine[azure]", "azure-identity"],
         required_configuration=["DRIFT_AZURE_SUBSCRIPTION_ID"],
         missing=missing,
         settings={"subscription_id_configured": bool(settings.azure_subscription_id)},

@@ -1,3 +1,3 @@
-"""Enterprise System Drift Engine."""
+"""System Drift Engine."""
 
 __version__ = "0.1.0"

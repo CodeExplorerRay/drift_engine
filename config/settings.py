@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     environment: Literal["local", "test", "staging", "production"] = "local"
-    service_name: str = "enterprise-drift-engine"
+    service_name: str = "system-drift-engine"
     log_level: str = "INFO"
     # Containerized services intentionally bind all interfaces.
     host: str = "0.0.0.0"  # noqa: S104  # nosec B104

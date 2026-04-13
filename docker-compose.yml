@@ -1,7 +1,7 @@
 services:
   api:
     build: .
-    image: enterprise-drift-engine:local
+    image: system-drift-engine:local
     depends_on:
       postgres:
         condition: service_healthy

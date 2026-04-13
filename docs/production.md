@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-This guide describes a hardened production deployment for Enterprise System Drift Engine.
+This guide describes a hardened production deployment for System Drift Engine.
 
 ## Required Controls
 

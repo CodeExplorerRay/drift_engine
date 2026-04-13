@@ -4,7 +4,7 @@ from drift_engine.core.models import Severity
 from drift_engine.policies.models import PolicyCondition, PolicyEffect, PolicyRule, RuleOperator
 
 
-def default_enterprise_rules() -> list[PolicyRule]:
+def default_policy_rules() -> list[PolicyRule]:
     return [
         PolicyRule(
             name="Public network exposure",

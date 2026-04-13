@@ -1,6 +1,6 @@
-# Enterprise System Drift Engine
+# System Drift Engine
 
-Enterprise System Drift Engine continuously collects infrastructure state, compares it to signed baselines, evaluates policy, scores operational and security risk, emits events, and can execute gated remediation.
+System Drift Engine continuously collects infrastructure state, compares it to signed baselines, evaluates policy, scores operational and security risk, emits events, and can execute gated remediation.
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ For production-like settings, use `docker-compose.prod.yml` and read [Production
 
 ## Integrations
 
-Local collectors are enabled by default. External enterprise integrations are opt-in so the engine does not accidentally scan a cluster or cloud account before operators configure credentials and scope.
+Local collectors are enabled by default. External integrations are opt-in so the engine does not accidentally scan a cluster or cloud account before operators configure credentials and scope.
 
 Enable integrations with `DRIFT_ENABLED_INTEGRATIONS`:
 
@@ -44,8 +44,8 @@ DRIFT_ENABLED_INTEGRATIONS=kubernetes,aws,azure
 Supported integrations:
 
 - Kubernetes: uses `kubectl` and the active kubeconfig context. Optional scope: `DRIFT_KUBERNETES_NAMESPACES=prod,platform`.
-- AWS: install `enterprise-drift-engine[aws]`, provide credentials through the standard AWS provider chain, and set `DRIFT_AWS_REGIONS=us-east-1,us-west-2`.
-- Azure: install `enterprise-drift-engine[azure]`, authenticate with `DefaultAzureCredential`, and set `DRIFT_AZURE_SUBSCRIPTION_ID=<subscription-id>`.
+- AWS: install `system-drift-engine[aws]`, provide credentials through the standard AWS provider chain, and set `DRIFT_AWS_REGIONS=us-east-1,us-west-2`.
+- Azure: install `system-drift-engine[azure]`, authenticate with `DefaultAzureCredential`, and set `DRIFT_AZURE_SUBSCRIPTION_ID=<subscription-id>`.
 
 The dashboard shows integration readiness, and the API exposes the same information at `GET /integrations`.
 

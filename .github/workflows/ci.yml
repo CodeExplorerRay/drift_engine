@@ -58,12 +58,12 @@ jobs:
         run: bandit -c pyproject.toml -r drift_engine config
 
       - name: Docker build
-        run: docker build -t enterprise-drift-engine:ci .
+        run: docker build -t system-drift-engine:ci .
 
       - name: Container vulnerability scan
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: enterprise-drift-engine:ci
+          image-ref: system-drift-engine:ci
           format: table
           severity: CRITICAL,HIGH
           exit-code: "1"

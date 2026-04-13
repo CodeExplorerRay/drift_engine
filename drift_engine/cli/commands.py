@@ -14,7 +14,7 @@ from drift_engine.api.dependencies import get_engine
 from drift_engine.collectors.base import CollectionContext
 from drift_engine.core.models import Baseline
 
-app = typer.Typer(help="Enterprise System Drift Engine CLI")
+app = typer.Typer(help="System Drift Engine CLI")
 console = Console()
 
 

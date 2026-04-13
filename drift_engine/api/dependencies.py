@@ -13,7 +13,7 @@ from drift_engine.events.bus import EventBus
 from drift_engine.events.handlers import log_event
 from drift_engine.policies.engine import PolicyEngine
 from drift_engine.policies.models import PolicyRule
-from drift_engine.policies.rules import default_enterprise_rules
+from drift_engine.policies.rules import default_policy_rules
 from drift_engine.remediation.approval import ApprovalPolicy
 from drift_engine.remediation.engine import RemediationEngine
 from drift_engine.storage.base import (
@@ -122,7 +122,7 @@ def build_engine_from_repositories(
         if settings.baseline_signing_secret
         else None
     )
-    policies = PolicyEngine([*default_enterprise_rules(), *persisted_policies])
+    policies = PolicyEngine([*default_policy_rules(), *persisted_policies])
     return DriftEngine(
         collectors=CollectorRegistry.default(settings),
         baselines=baselines,
