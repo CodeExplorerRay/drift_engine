@@ -7,7 +7,15 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
+    from config.settings import get_settings
     from drift_engine.api.app import create_app
+    from drift_engine.api.dependencies import get_engine, get_metrics
+
+    monkeypatch.setenv("DRIFT_REMEDIATION_ENABLED", "true")
+    monkeypatch.setenv("DRIFT_REMEDIATION_DRY_RUN", "true")
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_metrics.cache_clear()
 
     async def fake_kubernetes_check(
         self: object,
@@ -87,3 +95,47 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
     actions = {event["action"] for event in audit.json()}
     assert "baseline.created" in actions
     assert "job.created" in actions
+
+    missing_path = "tests/.tmp/definitely-missing-remediation-target"
+    drift_baseline = client.post(
+        "/baselines",
+        json={
+            "name": "remediation-target",
+            "resources": {
+                f"local::_::_::file::{missing_path}": {
+                    "resource_type": "file",
+                    "path": missing_path,
+                    "exists": True,
+                    "sha256": "expected-hash",
+                }
+            },
+        },
+    )
+    assert drift_baseline.status_code == 201
+
+    drift_report = client.post(
+        "/drifts/run",
+        json={
+            "baseline_id": drift_baseline.json()["id"],
+            "collector_names": ["file"],
+            "scope": {"file_paths": [missing_path]},
+        },
+    )
+    assert drift_report.status_code == 200
+    assert drift_report.json()["summary"]["total"] >= 1
+
+    plan = client.post(f"/remediation/reports/{drift_report.json()['id']}/plan")
+    assert plan.status_code == 200
+    plan_actions = plan.json()["actions"]
+    assert len(plan_actions) >= 1
+
+    for action in plan_actions:
+        approval = client.post(f"/remediation/actions/{action['id']}/approve", json={})
+        assert approval.status_code == 200
+
+    execution = client.post(
+        f"/remediation/reports/{drift_report.json()['id']}/execute",
+        headers={"Idempotency-Key": "test-remediation-execution"},
+    )
+    assert execution.status_code == 200
+    assert {action["status"] for action in execution.json()} == {"skipped"}

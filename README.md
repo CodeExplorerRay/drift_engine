@@ -21,6 +21,7 @@ Copy-Item .env.example .env
 ```
 
 The local `.env` file is ignored by git. It is for development-only defaults such as `local-dev-key`, local ports, and optional integration toggles.
+Local remediation execution is enabled in dry-run mode so the dashboard workflow can be tested without changing the host. Keep non-dry-run remediation disabled until runbooks are reviewed.
 
 ## Docker
 
