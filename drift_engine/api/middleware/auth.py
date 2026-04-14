@@ -21,7 +21,9 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if request.url.path == "/" or request.url.path.startswith(("/health", "/metrics")):
+        if request.url.path in {"/", "/favicon.ico"} or request.url.path.startswith(
+            ("/health", "/metrics")
+        ):
             return await call_next(request)
 
         configured_accounts = self.settings.service_account_values

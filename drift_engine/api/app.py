@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import HTMLResponse, Response
 
 from config.logging_config import configure_logging
 from config.settings import get_settings
@@ -69,6 +70,8 @@ def create_app() -> FastAPI:
         description=(
             "Continuous infrastructure drift detection, policy enforcement, " "and remediation."
         ),
+        docs_url=None,
+        redoc_url=None,
         lifespan=lifespan,
     )
     app.add_middleware(CorrelationIdMiddleware)
@@ -103,6 +106,22 @@ def create_app() -> FastAPI:
         except ImportError:
             return Response("metrics disabled", media_type="text/plain")
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+    @app.get("/docs", include_in_schema=False)
+    async def swagger_docs() -> HTMLResponse:
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url or "/openapi.json",
+            title=f"{app.title} - API docs",
+            swagger_favicon_url="/favicon.ico",
+        )
+
+    @app.get("/redoc", include_in_schema=False)
+    async def redoc_docs() -> HTMLResponse:
+        return get_redoc_html(
+            openapi_url=app.openapi_url or "/openapi.json",
+            title=f"{app.title} - ReDoc",
+            redoc_favicon_url="/favicon.ico",
+        )
 
     return app
 

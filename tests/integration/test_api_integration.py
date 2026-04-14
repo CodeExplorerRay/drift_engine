@@ -50,6 +50,16 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Create job" in dashboard.text
     assert "Approve action" in dashboard.text
     assert "Execute approved" in dashboard.text
+    assert 'href="/favicon.ico"' in dashboard.text
+
+    favicon = client.get("/favicon.ico")
+    assert favicon.status_code == 200
+    assert favicon.headers["content-type"].startswith("image/svg+xml")
+    assert "<svg" in favicon.text
+
+    docs = client.get("/docs")
+    assert docs.status_code == 200
+    assert "/favicon.ico" in docs.text
 
     integrations = client.get("/integrations")
     assert integrations.status_code == 200

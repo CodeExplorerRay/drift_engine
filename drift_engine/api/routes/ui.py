@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 router = APIRouter(tags=["ui"])
+
+FAVICON_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="16" fill="#fffaf0"/>
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#17211b" stroke-width="5"/>
+  <path d="M18 38 L29 27 L37 35 L48 24" fill="none" stroke="#e4572e"
+        stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="18" cy="38" r="4" fill="#1f8a70"/>
+  <circle cx="29" cy="27" r="4" fill="#f2b84b"/>
+  <circle cx="37" cy="35" r="4" fill="#315c74"/>
+  <circle cx="48" cy="24" r="4" fill="#e4572e"/>
+</svg>
+"""
 
 UI_HTML = """
 <!doctype html>
@@ -12,6 +25,7 @@ UI_HTML = """
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>System Drift Engine</title>
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml" />
   <style>
     :root {
       --ink: #17211b;
@@ -1372,3 +1386,8 @@ UI_HTML = """
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def dashboard() -> HTMLResponse:
     return HTMLResponse(UI_HTML)
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(FAVICON_SVG, media_type="image/svg+xml")
