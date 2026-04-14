@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -11,6 +12,10 @@ router = APIRouter(tags=["ui"])
 
 DASHBOARD_DIR = Path(__file__).resolve().parents[1] / "static" / "dashboard"
 DASHBOARD_INDEX = DASHBOARD_DIR / "index.html"
+ASSET_REFERENCE_PATTERN = re.compile(r'/assets/([^"\']+)')
+HASHED_ASSET_PATTERN = re.compile(
+    r"^(?P<base>.+)-[A-Za-z0-9_-]{6,}\.(?P<ext>css|js)(?P<map>\.map)?$"
+)
 
 FAVICON_SVG = """\
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -87,9 +92,46 @@ FALLBACK_HTML = """
 """
 
 
+def _candidate_asset_path(asset_path: str) -> Path | None:
+    assets_dir = (DASHBOARD_DIR / "assets").resolve()
+    requested_asset = (assets_dir / asset_path).resolve()
+    try:
+        requested_asset.relative_to(assets_dir)
+    except ValueError:
+        return None
+    if requested_asset.is_file():
+        return requested_asset
+
+    filename = Path(asset_path).name
+    match = HASHED_ASSET_PATTERN.match(filename)
+    if match is None:
+        return None
+
+    suffix = f".{match.group('ext')}{match.group('map') or ''}"
+    pattern = f"{match.group('base')}-*{suffix}"
+    candidates = sorted(
+        path
+        for path in assets_dir.glob(pattern)
+        if path.is_file() and path.name.endswith(suffix)
+    )
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate.stat().st_mtime_ns)
+
+
+def _dashboard_build_is_usable() -> bool:
+    if not DASHBOARD_INDEX.exists():
+        return False
+    dashboard_html = DASHBOARD_INDEX.read_text(encoding="utf-8")
+    asset_matches = ASSET_REFERENCE_PATTERN.findall(dashboard_html)
+    if not asset_matches:
+        return False
+    return all(_candidate_asset_path(asset_path) is not None for asset_path in asset_matches)
+
+
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def dashboard() -> HTMLResponse:
-    if DASHBOARD_INDEX.exists():
+    if _dashboard_build_is_usable():
         return HTMLResponse(DASHBOARD_INDEX.read_text(encoding="utf-8"))
     return HTMLResponse(FALLBACK_HTML)
 
@@ -101,12 +143,7 @@ async def favicon() -> Response:
 
 @router.get("/assets/{asset_path:path}", include_in_schema=False)
 async def dashboard_asset(asset_path: str) -> FileResponse:
-    assets_dir = (DASHBOARD_DIR / "assets").resolve()
-    requested_asset = (assets_dir / asset_path).resolve()
-    try:
-        requested_asset.relative_to(assets_dir)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="asset not found") from exc
-    if not requested_asset.is_file():
+    requested_asset = _candidate_asset_path(asset_path)
+    if requested_asset is None:
         raise HTTPException(status_code=404, detail="asset not found")
     return FileResponse(requested_asset)

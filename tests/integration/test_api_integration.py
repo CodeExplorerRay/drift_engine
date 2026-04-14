@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from uuid import uuid4
+
 import pytest
 
 
@@ -149,3 +152,40 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert execution.status_code == 200
     assert {action["status"] for action in execution.json()} == {"skipped"}
+
+
+def test_dashboard_asset_route_recovers_stale_hashed_asset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from drift_engine.api.app import create_app
+    from drift_engine.api.routes import ui
+
+    dashboard_dir = Path("tests/.tmp") / f"dashboard-{uuid4().hex}"
+    assets_dir = dashboard_dir / "assets"
+    assets_dir.mkdir(parents=True)
+
+    (assets_dir / "index-livehash.js").write_text("console.log('live build');", encoding="utf-8")
+    (dashboard_dir / "index.html").write_text(
+        (
+            "<!doctype html><html><head>"
+            '<script type="module" src="/assets/index-stalehash.js"></script>'
+            "</head><body><div id=\"root\"></div></body></html>"
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(ui, "DASHBOARD_DIR", dashboard_dir)
+    monkeypatch.setattr(ui, "DASHBOARD_INDEX", dashboard_dir / "index.html")
+
+    client = TestClient(create_app())
+
+    dashboard = client.get("/")
+    assert dashboard.status_code == 200
+    assert "/assets/index-stalehash.js" in dashboard.text
+
+    asset = client.get("/assets/index-stalehash.js")
+    assert asset.status_code == 200
+    assert "console.log('live build');" in asset.text

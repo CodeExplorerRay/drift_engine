@@ -7,6 +7,10 @@ System Drift Engine continuously collects infrastructure state, compares it to s
 ```bash
 cp .env.example .env
 pip install -e ".[dev]"
+cd frontend
+npm install
+npm run build
+cd ..
 drift-engine serve --reload
 ```
 
