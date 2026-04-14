@@ -4,15 +4,17 @@
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
   }
 
   body {
     min-width: 320px;
+    background: #0b0f14;
+    color: #e2e8f0;
   }
 
   ::selection {
-    background: #bae6fd;
-    color: #0f172a;
+    background: rgba(56, 189, 248, 0.35);
+    color: #f8fafc;
   }
 }

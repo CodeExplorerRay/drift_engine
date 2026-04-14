@@ -254,36 +254,55 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
-      <div className="grid min-h-screen lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="sticky top-0 hidden h-screen border-r border-slate-200 bg-white px-5 py-6 lg:block">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-sm font-bold text-white">
-              DE
+    <div className="min-h-screen bg-[#0b0f14] text-slate-200">
+      <div className="grid min-h-screen lg:grid-cols-[288px_minmax(0,1fr)]">
+        <aside className="sticky top-0 hidden h-screen border-r border-white/5 bg-[#0f141a] px-5 py-6 lg:block">
+          <div className="border-b border-white/5 pb-6">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-400">
+              Ops Console
             </div>
-            <div>
-              <h1 className="text-sm font-semibold tracking-[-0.02em]">Drift Engine</h1>
-              <p className="text-xs font-medium text-slate-500">Operator Console</p>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-sm font-bold text-white ring-1 ring-white/10">
+                DE
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold tracking-[-0.03em] text-white">Drift Engine</h1>
+                <p className="text-xs font-medium text-slate-400">Operator dashboard</p>
+              </div>
             </div>
           </div>
-          <nav className="mt-8 space-y-1" aria-label="Primary navigation">
-            {["Posture", "Priority queue", "Quick actions", "Evidence tabs"].map((item) => (
-              <a
-                className="flex rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                href={`#${item.toLowerCase().replaceAll(" ", "-")}`}
-                key={item}
+
+          <nav aria-label="Primary navigation" className="mt-6 space-y-1 text-sm">
+            <a
+              className="flex rounded-xl px-4 py-3 font-medium text-white bg-white/10"
+              href="#overview"
+            >
+              Overview
+            </a>
+            {tabs.map((tab) => (
+              <button
+                className={[
+                  "flex w-full rounded-xl px-4 py-3 text-left font-medium transition",
+                  activeTab === tab.id
+                    ? "bg-white/10 text-white"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                ].join(" ")}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                type="button"
               >
-                {item}
-              </a>
+                {tab.label}
+              </button>
             ))}
           </nav>
-          <div className="absolute bottom-6 left-5 right-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+
+          <div className="absolute bottom-6 left-5 right-5 rounded-2xl border border-white/5 bg-black/20 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               Status
             </p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{notice}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              API: {data.health.status} · Storage: {data.health.details?.storage_backend ?? "unknown"}
+            <p className="mt-2 text-sm font-semibold text-white">{notice}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              API {data.health.status} · Storage {data.health.details?.storage_backend ?? "unknown"}
             </p>
           </div>
         </aside>
@@ -291,12 +310,14 @@ function App() {
         <main className="min-w-0 px-4 py-4 sm:px-6 lg:px-8">
           <TopStatusBar
             health={data.health.status}
+            lastScan={latestReport?.generated_at ?? null}
             loading={loading}
             notice={notice}
             onRefresh={() => refresh()}
+            onRunScan={onRunScan}
           />
 
-          <div className="mx-auto max-w-[1480px] space-y-5">
+          <div className="mx-auto max-w-[1480px] space-y-6" id="overview">
             <PostureSummary
               criticalFindings={criticalFindings}
               lastScan={latestReport?.generated_at ?? null}
@@ -305,7 +326,7 @@ function App() {
               unhealthyIntegrations={unhealthyIntegrations.length}
             />
 
-            <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
+            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_370px]">
               <div className="space-y-5">
                 <IncidentSpotlight
                   finding={urgentFinding}
@@ -387,37 +408,44 @@ function App() {
 
 function TopStatusBar({
   health,
+  lastScan,
   loading,
   notice,
-  onRefresh
+  onRefresh,
+  onRunScan
 }: {
   health: string;
+  lastScan: string | null;
   loading: boolean;
   notice: string;
   onRefresh: () => void;
+  onRunScan: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-20 -mx-4 mb-5 border-b border-slate-200 bg-slate-50/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <header className="sticky top-0 z-20 -mx-4 mb-6 border-b border-white/5 bg-[#0b0f14]/90 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <div className="mx-auto flex max-w-[1480px] flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-            Configuration drift operations
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+            Posture
           </p>
-          <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-            What changed, how risky is it, and what needs action now?
+          <p className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">
+            Operator Dashboard
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge tone={toneForStatus(health)}>{health}</Badge>
-          <span className="hidden text-sm text-slate-500 sm:inline">{notice}</span>
+          <span className="hidden text-sm text-slate-400 xl:inline">Last scan {formatTime(lastScan)}</span>
           <a
-            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"
             href="/docs"
           >
             API docs
           </a>
-          <Button disabled={loading} onClick={onRefresh} variant="primary">
+          <Button disabled={loading} onClick={onRefresh} variant="ghost">
             {loading ? "Refreshing" : "Refresh"}
+          </Button>
+          <Button disabled={loading} onClick={onRunScan} variant="primary">
+            Run Scan
           </Button>
         </div>
       </div>
@@ -446,18 +474,18 @@ function PostureSummary({
     { label: "Last successful scan", value: formatTime(lastScan) }
   ];
   return (
-    <Card className="grid gap-0 divide-y divide-slate-200 md:grid-cols-5 md:divide-x md:divide-y-0">
+    <div className="grid gap-4 md:grid-cols-5">
       {metrics.map((metric) => (
-        <div className="px-5 py-4" key={metric.label}>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+        <Card className="px-4 py-4" key={metric.label}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             {metric.label}
           </p>
-          <p className="mt-2 truncate text-lg font-semibold tracking-[-0.03em] text-slate-950">
+          <p className="mt-2 truncate text-2xl font-semibold tracking-[-0.04em] text-white">
             {metric.value}
           </p>
-        </div>
+        </Card>
       ))}
-    </Card>
+    </div>
   );
 }
 
@@ -476,10 +504,10 @@ function IncidentSpotlight({
     return (
       <Card className="p-6">
         <Badge tone="info">No scan yet</Badge>
-        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white">
           Capture a baseline, then run your first drift scan.
         </h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
           The console will spotlight the highest-risk finding, approval needs, and the next
           recommended operator action after a scan completes.
         </p>
@@ -491,10 +519,10 @@ function IncidentSpotlight({
     return (
       <Card className="p-6">
         <Badge tone="good">Stable</Badge>
-        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white">
           No drift findings in the selected report.
         </h2>
-        <p className="mt-3 text-sm leading-6 text-slate-500">
+        <p className="mt-3 text-sm leading-6 text-slate-400">
           Latest scan completed at {formatTime(report.generated_at)} with a risk score of{" "}
           {Math.round(report.risk_score)}.
         </p>
@@ -503,46 +531,46 @@ function IncidentSpotlight({
   }
 
   return (
-    <Card className="overflow-hidden">
-      <div className="border-b border-slate-200 bg-white px-6 py-5">
+    <Card className="overflow-hidden border-red-500/20 bg-gradient-to-br from-red-950/35 via-[#11161d] to-[#11161d]">
+      <div className="border-b border-white/5 px-6 py-5">
         <div className="flex flex-wrap items-center gap-3">
           <Badge tone={toneForSeverity(finding.severity)}>{finding.severity}</Badge>
-          <span className="text-sm font-medium text-slate-500">
+          <span className="text-sm font-medium text-slate-400">
             Risk {Math.round(finding.risk_score)} · {finding.drift_type}
           </span>
         </div>
-        <h2 className="mt-4 max-w-4xl text-2xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-3xl">
+        <h2 className="mt-4 max-w-4xl text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl">
           {finding.resource_type} drift requires operator review.
         </h2>
-        <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-500">
+        <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-400">
           {shortId(finding.resource_key, 120)} changed at{" "}
-          <span className="font-mono text-slate-700">{finding.path || "/"}</span>. Review the
+          <span className="font-mono text-slate-200">{finding.path || "/"}</span>. Review the
           finding details, create a remediation plan, then approve only the safe actions.
         </p>
       </div>
-      <div className="grid gap-4 bg-slate-50 px-6 py-5 lg:grid-cols-3">
+      <div className="grid gap-4 bg-black/10 px-6 py-5 lg:grid-cols-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
             Expected
           </p>
-          <pre className="mt-2 max-h-28 overflow-auto rounded-xl bg-white p-3 text-xs text-slate-600 ring-1 ring-slate-200">
+          <pre className="mt-2 max-h-28 overflow-auto rounded-xl bg-black/30 p-3 text-xs text-slate-300 ring-1 ring-white/5">
             {JSON.stringify(finding.expected, null, 2)}
           </pre>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
             Actual
           </p>
-          <pre className="mt-2 max-h-28 overflow-auto rounded-xl bg-white p-3 text-xs text-slate-600 ring-1 ring-slate-200">
+          <pre className="mt-2 max-h-28 overflow-auto rounded-xl bg-black/30 p-3 text-xs text-slate-300 ring-1 ring-white/5">
             {JSON.stringify(finding.actual, null, 2)}
           </pre>
         </div>
-        <div className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col justify-between gap-4 rounded-xl border border-white/5 bg-black/20 p-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
               Next action
             </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <p className="mt-2 text-sm leading-6 text-slate-300">
               Prioritize this finding before routine baseline and integration work.
             </p>
           </div>
@@ -626,13 +654,13 @@ function PriorityQueue({
         title="What needs attention now"
         description="The queue intentionally highlights only urgent operational work."
       />
-      <div className="divide-y divide-slate-200">
+      <div className="divide-y divide-white/5">
         {rows.length ? (
           rows.map((row) => (
             <div className="grid gap-4 px-5 py-4 sm:grid-cols-[1fr_auto]" key={row.title}>
               <div>
                 <Badge tone={row.tone}>{row.title}</Badge>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{row.detail}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">{row.detail}</p>
               </div>
               <Button onClick={row.onClick}>{row.action}</Button>
             </div>
@@ -711,10 +739,10 @@ function QuickActions({
             placeholder="file,package,kubernetes"
             value={collectorText}
           />
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
             <input
               checked={scanAutoRemediate}
-              className="h-4 w-4 rounded border-slate-300 text-slate-950"
+              className="h-4 w-4 rounded border-white/10 bg-[#0b0f14] text-sky-400"
               onChange={(event) => onScanAutoRemediateChange(event.target.checked)}
               type="checkbox"
             />
@@ -747,7 +775,7 @@ function QuickActions({
         <ActionBlock title="Kubernetes">
           <Input label="Namespaces" onChange={onNamespacesChange} value={namespaces} />
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-slate-500">{kubernetesStatus}</p>
+            <p className="text-xs leading-5 text-slate-400">{kubernetesStatus}</p>
             <Button disabled={loading} onClick={onCheckKubernetes}>
               Check
             </Button>
@@ -768,8 +796,8 @@ function QuickActions({
 
 function ActionBlock({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+    <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+      <h3 className="text-sm font-semibold text-white">{title}</h3>
       <div className="mt-3 space-y-3">{children}</div>
     </div>
   );
@@ -788,11 +816,11 @@ function Input({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </span>
       <input
-        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+        className="mt-1 h-10 w-full rounded-xl border border-white/10 bg-[#0b0f14] px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-400 focus:ring-4 focus:ring-sky-500/10"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         value={value}
@@ -826,8 +854,8 @@ function EvidenceTabs({
 }) {
   return (
     <Card className="overflow-hidden" id="evidence-tabs">
-      <div className="border-b border-slate-200 px-5 pt-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+      <div className="border-b border-white/5 px-5 pt-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
           Evidence tabs
         </p>
         <div className="mt-3 flex gap-1 overflow-x-auto">
@@ -836,8 +864,8 @@ function EvidenceTabs({
               className={[
                 "border-b-2 px-3 py-3 text-sm font-semibold transition",
                 activeTab === tab.id
-                  ? "border-slate-950 text-slate-950"
-                  : "border-transparent text-slate-500 hover:text-slate-900"
+                  ? "border-sky-400 text-white"
+                  : "border-transparent text-slate-400 hover:text-white"
               ].join(" ")}
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -885,7 +913,7 @@ function FindingsTable({ report }: { report: DriftReport | null }) {
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.12em] text-slate-400">
+          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
             <th className="py-3 pr-4 font-semibold">Resource</th>
             <th className="px-4 py-3 font-semibold">Severity</th>
             <th className="px-4 py-3 font-semibold">Type</th>
@@ -893,20 +921,20 @@ function FindingsTable({ report }: { report: DriftReport | null }) {
             <th className="py-3 pl-4 font-semibold">Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-white/5">
           {findings.map((finding) => (
             <tr className="align-top" key={finding.id}>
               <td className="max-w-md py-4 pr-4">
-                <p className="font-medium text-slate-900">{shortId(finding.resource_key, 82)}</p>
-                <p className="mt-1 font-mono text-xs text-slate-400">{shortId(finding.fingerprint, 32)}</p>
+                <p className="font-medium text-white">{shortId(finding.resource_key, 82)}</p>
+                <p className="mt-1 font-mono text-xs text-slate-500">{shortId(finding.fingerprint, 32)}</p>
               </td>
               <td className="px-4 py-4">
                 <Badge tone={toneForSeverity(finding.severity)}>{finding.severity}</Badge>
               </td>
-              <td className="px-4 py-4 text-slate-600">
+              <td className="px-4 py-4 text-slate-300">
                 {finding.drift_type} · {finding.resource_type}
               </td>
-              <td className="px-4 py-4 font-mono text-xs text-slate-500">{finding.path || "/"}</td>
+              <td className="px-4 py-4 font-mono text-xs text-slate-400">{finding.path || "/"}</td>
               <td className="py-4 pl-4">
                 <Badge tone={toneForStatus(finding.status)}>{finding.status}</Badge>
               </td>
@@ -938,7 +966,7 @@ function ReportsTable({
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.12em] text-slate-400">
+          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
             <th className="py-3 pr-4 font-semibold">Report</th>
             <th className="px-4 py-3 font-semibold">Risk</th>
             <th className="px-4 py-3 font-semibold">Findings</th>
@@ -946,12 +974,12 @@ function ReportsTable({
             <th className="py-3 pl-4 font-semibold">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-white/5">
           {reports.map((report) => (
             <tr key={report.id}>
               <td className="py-4 pr-4">
-                <p className="font-medium text-slate-900">{shortId(report.id, 18)}</p>
-                <p className="mt-1 font-mono text-xs text-slate-400">
+                <p className="font-medium text-white">{shortId(report.id, 18)}</p>
+                <p className="mt-1 font-mono text-xs text-slate-500">
                   baseline {shortId(report.baseline_id, 22)}
                 </p>
               </td>
@@ -960,8 +988,8 @@ function ReportsTable({
                   {String(Math.round(report.risk_score))}
                 </Badge>
               </td>
-              <td className="px-4 py-4 text-slate-600">{findingTotal(report)}</td>
-              <td className="px-4 py-4 text-slate-600">{formatTime(report.generated_at)}</td>
+              <td className="px-4 py-4 text-slate-300">{findingTotal(report)}</td>
+              <td className="px-4 py-4 text-slate-300">{formatTime(report.generated_at)}</td>
               <td className="py-4 pl-4">
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => setSelectedReportId(report.id)} variant="ghost">
@@ -1002,16 +1030,16 @@ function RemediationTable({
         const isApproved = ["approved", "skipped", "succeeded"].includes(action.status);
         return (
           <div
-            className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_auto]"
+            className="grid gap-4 rounded-2xl border border-white/5 bg-black/20 p-4 lg:grid-cols-[1fr_auto]"
             key={action.id}
           >
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={toneForStatus(action.status)}>{action.status}</Badge>
-                <span className="text-sm font-semibold text-slate-900">{action.strategy}</span>
+                <span className="text-sm font-semibold text-white">{action.strategy}</span>
               </div>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{action.description}</p>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-sm leading-6 text-slate-300">{action.description}</p>
+              <p className="mt-2 text-xs text-slate-400">
                 Risk {Math.round(action.risk_score)} · Dry run {action.dry_run ? "enabled" : "off"} ·
                 Approval {action.requires_approval ? "required" : "automatic"}
               </p>
@@ -1039,7 +1067,7 @@ function BaselinesTable({ baselines }: { baselines: Baseline[] }) {
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.12em] text-slate-400">
+          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
             <th className="py-3 pr-4 font-semibold">Baseline</th>
             <th className="px-4 py-3 font-semibold">Version</th>
             <th className="px-4 py-3 font-semibold">Resources</th>
@@ -1047,21 +1075,21 @@ function BaselinesTable({ baselines }: { baselines: Baseline[] }) {
             <th className="py-3 pl-4 font-semibold">Created</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-white/5">
           {baselines.map((baseline) => (
             <tr key={baseline.id}>
               <td className="py-4 pr-4">
-                <p className="font-medium text-slate-900">{baseline.name}</p>
-                <p className="mt-1 font-mono text-xs text-slate-400">{shortId(baseline.id, 24)}</p>
+                <p className="font-medium text-white">{baseline.name}</p>
+                <p className="mt-1 font-mono text-xs text-slate-500">{shortId(baseline.id, 24)}</p>
               </td>
-              <td className="px-4 py-4 text-slate-600">{baseline.version}</td>
-              <td className="px-4 py-4 text-slate-600">
+              <td className="px-4 py-4 text-slate-300">{baseline.version}</td>
+              <td className="px-4 py-4 text-slate-300">
                 {Object.keys(baseline.resources || {}).length}
               </td>
-              <td className="px-4 py-4 font-mono text-xs text-slate-500">
+              <td className="px-4 py-4 font-mono text-xs text-slate-400">
                 {shortId(baseline.checksum, 28)}
               </td>
-              <td className="py-4 pl-4 text-slate-600">{formatTime(baseline.created_at)}</td>
+              <td className="py-4 pl-4 text-slate-300">{formatTime(baseline.created_at)}</td>
             </tr>
           ))}
         </tbody>
@@ -1084,7 +1112,7 @@ function JobsTable({
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.12em] text-slate-400">
+          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
             <th className="py-3 pr-4 font-semibold">Job</th>
             <th className="px-4 py-3 font-semibold">Interval</th>
             <th className="px-4 py-3 font-semibold">Next run</th>
@@ -1092,16 +1120,16 @@ function JobsTable({
             <th className="py-3 pl-4 font-semibold">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-white/5">
           {jobs.map((job) => (
             <tr key={job.id}>
               <td className="py-4 pr-4">
-                <p className="font-medium text-slate-900">{job.name}</p>
-                <p className="mt-1 font-mono text-xs text-slate-400">{shortId(job.id, 24)}</p>
+                <p className="font-medium text-white">{job.name}</p>
+                <p className="mt-1 font-mono text-xs text-slate-500">{shortId(job.id, 24)}</p>
               </td>
-              <td className="px-4 py-4 text-slate-600">{job.interval_seconds}s</td>
-              <td className="px-4 py-4 text-slate-600">{formatTime(job.next_run_at)}</td>
-              <td className="px-4 py-4 text-slate-600">{formatTime(job.last_run_at)}</td>
+              <td className="px-4 py-4 text-slate-300">{job.interval_seconds}s</td>
+              <td className="px-4 py-4 text-slate-300">{formatTime(job.next_run_at)}</td>
+              <td className="px-4 py-4 text-slate-300">{formatTime(job.last_run_at)}</td>
               <td className="py-4 pl-4">
                 <Button onClick={() => onRunJob(job.id)}>Run now</Button>
               </td>
@@ -1120,18 +1148,18 @@ function IntegrationsGrid({ data }: { data: DashboardData }) {
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {data.integrations.map((integration) => (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={integration.name}>
+        <div className="rounded-2xl border border-white/5 bg-black/20 p-4" key={integration.name}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="font-semibold text-slate-950">
+              <p className="font-semibold text-white">
                 {integration.display_name || integration.name}
               </p>
               <p className="mt-1 text-xs text-slate-500">{integration.collector_name}</p>
             </div>
             <Badge tone={toneForStatus(integration.status)}>{integration.status}</Badge>
           </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">{integration.description}</p>
-          <p className="mt-3 text-xs leading-5 text-slate-500">
+          <p className="mt-3 text-sm leading-6 text-slate-300">{integration.description}</p>
+          <p className="mt-3 text-xs leading-5 text-slate-400">
             Missing: {integration.missing.length ? integration.missing.join(", ") : "None"}
           </p>
         </div>
@@ -1148,16 +1176,16 @@ function AuditList({ data }: { data: DashboardData }) {
     <div className="grid gap-3">
       {data.audit.map((event) => (
         <div
-          className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_auto]"
+          className="grid gap-3 rounded-2xl border border-white/5 bg-black/20 p-4 sm:grid-cols-[1fr_auto]"
           key={event.id}
         >
           <div>
-            <p className="font-semibold text-slate-950">{event.action}</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="font-semibold text-white">{event.action}</p>
+            <p className="mt-1 text-sm text-slate-400">
               {event.actor_id} changed {event.target_type} {shortId(event.target_id, 24)}
             </p>
           </div>
-          <p className="text-sm text-slate-500">{formatTime(event.created_at)}</p>
+          <p className="text-sm text-slate-400">{formatTime(event.created_at)}</p>
         </div>
       ))}
     </div>

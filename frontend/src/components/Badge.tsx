@@ -1,11 +1,11 @@
 export type BadgeTone = "neutral" | "good" | "warning" | "danger" | "info";
 
 const tones: Record<BadgeTone, string> = {
-  neutral: "bg-slate-100 text-slate-600 ring-slate-200",
-  good: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  warning: "bg-amber-50 text-amber-700 ring-amber-100",
-  danger: "bg-red-50 text-red-700 ring-red-100",
-  info: "bg-sky-50 text-sky-700 ring-sky-100"
+  neutral: "bg-white/5 text-slate-300 ring-white/10",
+  good: "bg-emerald-500/12 text-emerald-300 ring-emerald-400/15",
+  warning: "bg-amber-500/12 text-amber-300 ring-amber-400/15",
+  danger: "bg-red-500/12 text-red-300 ring-red-400/15",
+  info: "bg-sky-500/12 text-sky-300 ring-sky-400/15"
 };
 
 export function toneForStatus(status: string | null | undefined): BadgeTone {
