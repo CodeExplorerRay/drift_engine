@@ -36,6 +36,12 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
     assert dashboard.status_code == 200
     assert "System Drift Engine" in dashboard.text
     assert "Integrations" in dashboard.text
+    assert "Report history" in dashboard.text
+    assert "Remediation queue" in dashboard.text
+    assert "Audit trail" in dashboard.text
+    assert "Create job" in dashboard.text
+    assert "Approve action" in dashboard.text
+    assert "Execute approved" in dashboard.text
 
     integrations = client.get("/integrations")
     assert integrations.status_code == 200

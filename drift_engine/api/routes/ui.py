@@ -302,8 +302,11 @@ UI_HTML = """
     .collector-list,
     .integration-list,
     .baseline-list,
+    .report-list,
     .job-list,
-    .finding-list {
+    .finding-list,
+    .remediation-list,
+    .audit-list {
       display: grid;
       gap: 10px;
     }
@@ -311,8 +314,11 @@ UI_HTML = """
     .collector-item,
     .integration-item,
     .baseline-item,
+    .report-item,
     .job-item,
-    .finding-item {
+    .finding-item,
+    .remediation-item,
+    .audit-item {
       display: grid;
       gap: 7px;
       padding: 13px 14px;
@@ -329,6 +335,44 @@ UI_HTML = """
     .integration-item {
       grid-template-columns: 1fr auto;
       align-items: start;
+    }
+
+    .inline-form {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.35fr) auto;
+      gap: 10px;
+      align-items: end;
+      padding-bottom: 16px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .item-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .mini-button {
+      width: fit-content;
+      min-height: 32px;
+      padding: 0 11px;
+      border: 1px solid rgba(23, 33, 27, 0.14);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.68);
+      color: var(--ink);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .mini-button:hover {
+      border-color: rgba(228, 87, 46, 0.55);
+      color: var(--accent-dark);
     }
 
     .collector-item input {
@@ -502,7 +546,8 @@ UI_HTML = """
 
     @media (max-width: 1040px) {
       .hero,
-      .grid {
+      .grid,
+      .inline-form {
         grid-template-columns: 1fr;
       }
 
@@ -588,6 +633,7 @@ UI_HTML = """
         <button class="button secondary" id="kubernetes-check-button">
           Check Kubernetes integration
         </button>
+        <button class="button secondary" id="refresh-button">Refresh dashboard</button>
       </aside>
     </section>
 
@@ -653,7 +699,30 @@ UI_HTML = """
               <p>Persisted scan cadence and recent execution state.</p>
             </div>
           </div>
-          <div class="panel-body job-list" id="job-list"></div>
+          <div class="panel-body">
+            <div class="inline-form">
+              <label>
+                Job name
+                <input id="job-name" value="continuous-drift-watch" />
+              </label>
+              <label>
+                Interval seconds
+                <input id="job-interval" type="number" min="60" value="3600" />
+              </label>
+              <button class="button secondary" id="job-button">Create job</button>
+            </div>
+            <div class="job-list" id="job-list"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Report history</h2>
+              <p>Recent drift reports available for inspection and remediation planning.</p>
+            </div>
+          </div>
+          <div class="panel-body report-list" id="report-list"></div>
         </section>
 
         <section class="panel">
@@ -664,6 +733,26 @@ UI_HTML = """
             </div>
           </div>
           <div class="panel-body finding-list" id="finding-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Remediation queue</h2>
+              <p>Generated remediation actions remain gated until approval and execution.</p>
+            </div>
+          </div>
+          <div class="panel-body remediation-list" id="remediation-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Audit trail</h2>
+              <p>Durable write and security events visible to authorized operators.</p>
+            </div>
+          </div>
+          <div class="panel-body audit-list" id="audit-list"></div>
         </section>
 
         <section class="panel">
@@ -691,6 +780,8 @@ UI_HTML = """
       reports: [],
       jobs: [],
       jobRuns: [],
+      remediationActions: [],
+      auditEvents: [],
       latestReport: null,
     };
 
@@ -738,6 +829,15 @@ UI_HTML = """
         throw new Error(`${response.status} ${detail}`);
       }
       return data;
+    }
+
+    async function safeFetchJson(path, fallback) {
+      try {
+        return await fetchJson(path);
+      } catch (error) {
+        log(`Skipped ${path}: ${error.message}`);
+        return fallback;
+      }
     }
 
     function selectedCollectors() {
@@ -867,10 +967,94 @@ UI_HTML = """
       `).join("");
     }
 
+    function renderReports() {
+      if (!state.reports.length) {
+        $("report-list").innerHTML = [
+          '<div class="empty">No drift reports yet. Run a scan to create one.</div>',
+        ].join("");
+        return;
+      }
+
+      $("report-list").innerHTML = state.reports.slice(0, 10).map((report) => {
+        const total = report.summary?.total ?? report.findings?.length ?? 0;
+        return `
+          <article class="report-item">
+            <div class="item-title">${escapeHtml(report.id)}</div>
+            <div class="item-meta">
+              Baseline: ${escapeHtml(report.baseline_id)} | Risk: ${escapeHtml(report.risk_score)}
+            </div>
+            <div class="item-meta">
+              Findings: ${escapeHtml(total)} | Generated: ${escapeHtml(report.generated_at)}
+            </div>
+            <div class="item-actions">
+              <button class="mini-button" data-select-report="${escapeHtml(report.id)}">
+                Inspect
+              </button>
+              <button class="mini-button" data-plan-report="${escapeHtml(report.id)}">
+                Plan remediation
+              </button>
+              <button class="mini-button" data-execute-report="${escapeHtml(report.id)}">
+                Execute approved
+              </button>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderRemediationActions() {
+      if (!state.remediationActions.length) {
+        $("remediation-list").innerHTML = [
+          '<div class="empty">No remediation actions generated yet.</div>',
+        ].join("");
+        return;
+      }
+
+      $("remediation-list").innerHTML = state.remediationActions.slice(0, 12).map((action) => `
+        <article class="remediation-item">
+          <span class="severity">${escapeHtml(action.status)}</span>
+          <div class="item-title">${escapeHtml(action.strategy)}</div>
+          <div class="item-meta">${escapeHtml(action.description)}</div>
+          <div class="item-meta">
+            Risk: ${escapeHtml(action.risk_score)}
+            | Approval: ${escapeHtml(action.requires_approval ? "required" : "auto")}
+            | Dry run: ${escapeHtml(action.dry_run)}
+          </div>
+          <div class="item-actions">
+            <button class="mini-button" data-approve-action="${escapeHtml(action.id)}">
+              Approve action
+            </button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function renderAuditEvents() {
+      if (!state.auditEvents.length) {
+        $("audit-list").innerHTML = [
+          '<div class="empty">',
+          "No audit events visible. Add an API key with audit:read if needed.",
+          "</div>",
+        ].join("");
+        return;
+      }
+
+      $("audit-list").innerHTML = state.auditEvents.slice(0, 12).map((event) => `
+        <article class="audit-item">
+          <div class="item-title">${escapeHtml(event.action)}</div>
+          <div class="item-meta">
+            Actor: ${escapeHtml(event.actor_id)} | Target: ${escapeHtml(event.target_type)}
+            / ${escapeHtml(event.target_id)}
+          </div>
+          <div class="item-meta">${escapeHtml(event.created_at)}</div>
+        </article>
+      `).join("");
+    }
+
     function renderJobs() {
       if (!state.jobs.length) {
         $("job-list").innerHTML = [
-          '<div class="empty">No scheduled scan jobs yet. Create one from the API.</div>',
+          '<div class="empty">No scheduled scan jobs yet. Create one above.</div>',
         ].join("");
         return;
       }
@@ -888,6 +1072,9 @@ UI_HTML = """
               Every ${escapeHtml(job.interval_seconds)}s | Next: ${escapeHtml(job.next_run_at)}
             </div>
             <div class="item-meta">Latest: ${escapeHtml(status)}</div>
+            <div class="item-actions">
+              <button class="mini-button" data-run-job="${escapeHtml(job.id)}">Run now</button>
+            </div>
           </article>
         `;
       }).join("");
@@ -905,13 +1092,24 @@ UI_HTML = """
     }
 
     async function refreshData() {
-      const [collectors, integrations, baselines, reports, jobs, jobRuns] = await Promise.all([
+      const [
+        collectors,
+        integrations,
+        baselines,
+        reports,
+        jobs,
+        jobRuns,
+        remediationActions,
+        auditEvents,
+      ] = await Promise.all([
         fetchJson("/collectors"),
         fetchJson("/integrations"),
         fetchJson("/baselines"),
         fetchJson("/drifts"),
-        fetchJson("/jobs"),
-        fetchJson("/jobs/runs"),
+        safeFetchJson("/jobs", []),
+        safeFetchJson("/jobs/runs", []),
+        safeFetchJson("/remediation/actions", []),
+        safeFetchJson("/audit", []),
       ]);
       state.collectors = collectors;
       state.integrations = integrations;
@@ -919,12 +1117,17 @@ UI_HTML = """
       state.reports = reports;
       state.jobs = jobs;
       state.jobRuns = jobRuns;
+      state.remediationActions = remediationActions;
+      state.auditEvents = auditEvents;
       state.latestReport = reports[0] || null;
       renderCollectors();
       renderIntegrations();
       renderBaselines();
       renderReport();
+      renderReports();
       renderJobs();
+      renderRemediationActions();
+      renderAuditEvents();
     }
 
     async function captureBaseline() {
@@ -1002,6 +1205,87 @@ UI_HTML = """
       await refreshData();
     }
 
+    async function createScheduledJob() {
+      const baselineId = $("baseline-select").value;
+      if (!baselineId) {
+        toast("Select a baseline before creating a job.");
+        return;
+      }
+      const interval = Number($("job-interval").value || 0);
+      if (!Number.isFinite(interval) || interval < 60) {
+        toast("Use an interval of at least 60 seconds.");
+        return;
+      }
+      const names = selectedCollectors();
+      const job = await fetchJson("/jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("job-name").value.trim() || `drift-watch-${Date.now()}`,
+          baseline_id: baselineId,
+          interval_seconds: interval,
+          collector_names: names.length ? names : null,
+          enabled: true,
+        }),
+      });
+      log(`Created scheduled job ${job.name}.`);
+      toast("Scheduled scan job created.");
+      await refreshData();
+    }
+
+    async function runJobNow(jobId) {
+      const run = await fetchJson(`/jobs/${encodeURIComponent(jobId)}/run`, {
+        method: "POST",
+      });
+      log(`Manual job run ${run.id} finished with status ${run.status}.`);
+      toast("Scheduled job executed.");
+      await refreshData();
+    }
+
+    function selectReport(reportId) {
+      const report = state.reports.find((item) => item.id === reportId);
+      if (!report) {
+        toast("Report is no longer loaded.");
+        return;
+      }
+      state.latestReport = report;
+      renderReport();
+      log(`Inspecting report ${report.id}.`);
+    }
+
+    async function planRemediation(reportId) {
+      const plan = await fetchJson(`/remediation/reports/${encodeURIComponent(reportId)}/plan`, {
+        method: "POST",
+      });
+      const actions = plan.actions || [];
+      log(`Prepared remediation plan for ${reportId} with ${actions.length} actions.`);
+      toast("Remediation plan prepared.");
+      await refreshData();
+    }
+
+    async function approveRemediationAction(actionId) {
+      const action = await fetchJson(
+        `/remediation/actions/${encodeURIComponent(actionId)}/approve`,
+        {
+          method: "POST",
+          body: JSON.stringify({ expires_in_seconds: 3600 }),
+        },
+      );
+      log(`Approved remediation action ${action.id}.`);
+      toast("Remediation action approved.");
+      await refreshData();
+    }
+
+    async function executeRemediation(reportId) {
+      const path = `/remediation/reports/${encodeURIComponent(reportId)}/execute`;
+      const actions = await fetchJson(path, {
+        method: "POST",
+        headers: { "Idempotency-Key": `browser-${reportId}` },
+      });
+      log(`Executed remediation for ${reportId}; ${actions.length} actions returned.`);
+      toast("Remediation execution requested.");
+      await refreshData();
+    }
+
     async function guard(button, task) {
       button.disabled = true;
       try {
@@ -1030,6 +1314,44 @@ UI_HTML = """
       "click",
       () => guard($("run-scan-button"), runDriftScan),
     );
+    $("job-button").addEventListener(
+      "click",
+      () => guard($("job-button"), createScheduledJob),
+    );
+    $("refresh-button").addEventListener(
+      "click",
+      () => guard($("refresh-button"), refreshData),
+    );
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const reportId = target.dataset.selectReport;
+      if (reportId) {
+        selectReport(reportId);
+        return;
+      }
+      const planReportId = target.dataset.planReport;
+      if (planReportId) {
+        guard(target, () => planRemediation(planReportId));
+        return;
+      }
+      const executeReportId = target.dataset.executeReport;
+      if (executeReportId) {
+        guard(target, () => executeRemediation(executeReportId));
+        return;
+      }
+      const actionId = target.dataset.approveAction;
+      if (actionId) {
+        guard(target, () => approveRemediationAction(actionId));
+        return;
+      }
+      const jobId = target.dataset.runJob;
+      if (jobId) {
+        guard(target, () => runJobNow(jobId));
+      }
+    });
 
     (async function boot() {
       await refreshHealth();

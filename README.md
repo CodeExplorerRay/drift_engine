@@ -31,6 +31,16 @@ The Docker profile uses `DRIFT_STORAGE_BACKEND=postgres` and stores baselines, s
 
 For production-like settings, use `docker-compose.prod.yml` and read [Production Deployment Guide](docs/production.md). Rollback procedures are documented in [Rollback Procedures](docs/rollback.md).
 
+## Self-Hosted CI/CD
+
+The repo includes a no-billing Woodpecker CI setup for running checks on your own Docker host:
+
+```bash
+docker compose -f docker-compose.ci.yml up -d
+```
+
+Open the CI web UI at `http://localhost:8000`. The pipeline in `.woodpecker.yml` runs linting, type checks, tests with coverage, Alembic migration validation, an API dashboard smoke test, and a dry-run Docker image build. Setup details are in [Self-Hosted CI/CD](docs/ci-cd.md).
+
 ## Integrations
 
 Local collectors are enabled by default. External integrations are opt-in so the engine does not accidentally scan a cluster or cloud account before operators configure credentials and scope.

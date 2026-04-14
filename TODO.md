@@ -55,7 +55,7 @@ This list keeps the System Drift Engine hardening work ordered and auditable.
 - [x] Document integration setup and scoping options for real infrastructure targets.
 - [x] Add tests for integration configuration and API visibility.
 
-## Phase 8: Kubernetes End-To-End Integration
+## Phase 8: Kubernetes Integration Readiness
 
 - [x] Add a Kubernetes readiness check endpoint for kubectl, context, namespace access, and workload read permissions.
 - [x] Allow baseline capture and drift scans to pass Kubernetes namespace scope.
@@ -64,3 +64,27 @@ This list keeps the System Drift Engine hardening work ordered and auditable.
 - [x] Add browser dashboard controls for namespace scoping and Kubernetes readiness checks.
 - [x] Add local Kubernetes demo manifests that intentionally create drift.
 - [x] Add tests for Kubernetes integration checks, scoped collector behavior, policies, and API visibility.
+
+## Phase 9: Operator Dashboard
+
+- [x] Add report history with inspect and remediation-plan actions.
+- [x] Add scheduled scan job creation and manual run controls.
+- [x] Add remediation queue visibility for generated actions.
+- [x] Add remediation approval and approved execution controls.
+- [x] Add audit trail visibility for authorized operators.
+- [x] Add dashboard refresh flow for production API-key sessions.
+
+## Phase 10: Self-Hosted CI/CD
+
+- [x] Add a no-billing Docker Compose CI server option.
+- [x] Add a Woodpecker pipeline for lint, type checks, tests, coverage, migration checks, API smoke checks, and Docker build validation.
+- [x] Document GitHub and GitLab self-hosted CI setup.
+- [x] Keep CI secrets out of the repository and document local environment variables.
+
+## Phase 11: Live Kubernetes Validation
+
+- [ ] Install or start a real local Kubernetes cluster with kind, minikube, or Docker Desktop Kubernetes.
+- [ ] Apply `examples/kubernetes/baseline.yaml`.
+- [ ] Capture a Kubernetes baseline from the live cluster.
+- [ ] Apply `examples/kubernetes/drift.yaml`.
+- [ ] Run a drift scan and record the actual detected deployment, service, and RBAC findings.

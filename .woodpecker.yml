@@ -1,0 +1,27 @@
+when:
+  event:
+    - push
+    - pull_request
+    - manual
+
+steps:
+  quality:
+    image: python:3.12-slim
+    commands:
+      - python -m pip install --upgrade pip
+      - pip install -e ".[dev]"
+      - ruff check config drift_engine tests scripts
+      - mypy config drift_engine tests scripts
+      - pytest --cov=config --cov=drift_engine --cov-report=term-missing --cov-report=xml
+      - alembic -c alembic/alembic.ini heads
+      - uvicorn drift_engine.api.app:create_app --factory --host 127.0.0.1 --port 8080 &
+      - python scripts/ci_api_smoke.py
+
+  docker-build:
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      dry_run: true
+      dockerfile: Dockerfile
+      repo: system-drift-engine
+      tags:
+        - ci-${CI_COMMIT_SHA}
