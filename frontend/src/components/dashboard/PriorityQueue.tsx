@@ -1,17 +1,21 @@
-import type { DriftFinding, DriftReport, RemediationAction } from "../../types";
+import type { DriftFinding, DriftReport, Integration, RemediationAction, ScheduledJob } from "../../types";
 import { Badge, type BadgeTone, toneForSeverity } from "../Badge";
 import { Button } from "../Button";
 import { Card, SectionHeader } from "../Card";
 import { EmptyState } from "../EmptyState";
-import { findingTotal, shortId } from "./shared";
+import { findingTotal, humanizeLabel, shortId } from "./shared";
 
 type PriorityQueueProps = {
-  actions: RemediationAction[];
+  criticalFindings: number;
   finding: DriftFinding | null;
-  integrations: number;
+  integrations: Integration[];
+  jobs: ScheduledJob[];
+  pendingApprovals: RemediationAction[];
   report: DriftReport | null;
-  onApprove: (actionId: string) => void;
-  onPlan: () => void;
+  onOpenFindings: () => void;
+  onOpenIntegrations: () => void;
+  onOpenJobs: () => void;
+  onOpenRemediation: () => void;
 };
 
 type PriorityRow = {
@@ -23,48 +27,72 @@ type PriorityRow = {
 };
 
 export function PriorityQueue({
-  actions,
+  criticalFindings,
   finding,
   integrations,
+  jobs,
+  pendingApprovals,
   report,
-  onApprove,
-  onPlan
+  onOpenFindings,
+  onOpenIntegrations,
+  onOpenJobs,
+  onOpenRemediation
 }: PriorityQueueProps) {
+  const reportFindings = findingTotal(report);
+  const highestFindingTitle =
+    criticalFindings > 0
+      ? `${criticalFindings} critical finding${criticalFindings === 1 ? "" : "s"}`
+      : reportFindings > 0
+        ? `${reportFindings} finding${reportFindings === 1 ? "" : "s"} awaiting review`
+        : null;
+
   const rows = [
-    finding
+    highestFindingTitle && finding
       ? {
-          title: `${finding.severity} ${finding.resource_type} drift`,
-          detail: shortId(finding.resource_key, 92),
+          title: highestFindingTitle,
+          detail: `${humanizeLabel(finding.resource_type)} drift at ${finding.path || "$"} · ${shortId(finding.resource_key, 80)}`,
           tone: toneForSeverity(finding.severity),
-          action: "Review finding",
-          onClick: onPlan
+          action: "Open report",
+          onClick: onOpenFindings
         }
       : null,
-    actions[0]
+    pendingApprovals[0]
       ? {
-          title: "Approval waiting",
-          detail: actions[0].description,
+          title: `${pendingApprovals.length} approval${pendingApprovals.length === 1 ? "" : "s"} pending`,
+          detail: pendingApprovals[0].description,
           tone: "warning" as const,
-          action: "Approve action",
-          onClick: () => onApprove(actions[0].id)
+          action: "Review approvals",
+          onClick: onOpenRemediation
         }
       : null,
-    integrations > 0
+    integrations.length > 0
       ? {
-          title: "Integration health degraded",
-          detail: `${integrations} enabled integration(s) need configuration or readiness review.`,
+          title: `${integrations.length} integration${integrations.length === 1 ? "" : "s"} degraded`,
+          detail: integrations
+            .slice(0, 2)
+            .map((integration) => integration.display_name || integration.name)
+            .join(", "),
           tone: "warning" as const,
           action: "Inspect",
-          onClick: onPlan
+          onClick: onOpenIntegrations
+        }
+      : null,
+    jobs.length > 0
+      ? {
+          title: `${jobs.length} scheduled job${jobs.length === 1 ? "" : "s"} overdue`,
+          detail: `${jobs[0].name} is past its next run window.`,
+          tone: "warning" as const,
+          action: "Open jobs",
+          onClick: onOpenJobs
         }
       : null,
     report && findingTotal(report) === 0
       ? {
-          title: "No open drift in latest report",
-          detail: `Report ${shortId(report.id, 16)} completed cleanly.`,
+          title: "No urgent operator queue items",
+          detail: `Latest report ${shortId(report.id, 16)} completed without open drift.`,
           tone: "good" as const,
-          action: "Keep monitoring",
-          onClick: onPlan
+          action: "Open report",
+          onClick: onOpenFindings
         }
       : null
   ].filter((row): row is PriorityRow => row !== null);
@@ -74,7 +102,7 @@ export function PriorityQueue({
       <SectionHeader
         eyebrow="Priority queue"
         title="What needs attention now"
-        description="The queue intentionally highlights only urgent operational work."
+        description="Only real, currently actionable work is promoted into this queue."
       />
       <div className="divide-y divide-white/5">
         {rows.length ? (

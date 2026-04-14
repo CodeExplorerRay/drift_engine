@@ -26,6 +26,7 @@ import type {
   DashboardData,
   DriftFinding,
   DriftReport,
+  Integration,
   RemediationAction,
   ScheduledJob
 } from "./types";
@@ -76,6 +77,18 @@ function reportForAction(action: RemediationAction, reports: DriftReport[]): str
   return report?.id ?? null;
 }
 
+function isPast(value: string | null | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const timestamp = Date.parse(value);
+  return !Number.isNaN(timestamp) && timestamp <= Date.now();
+}
+
+function isEnabled(integration: Integration): boolean {
+  return integration.enabled;
+}
+
 function selectMostUrgentFinding(report: DriftReport | null): DriftFinding | null {
   if (!report || report.findings.length === 0) {
     return null;
@@ -106,15 +119,20 @@ function App() {
   const pendingApprovals = data.actions.filter((action) =>
     ["planned", "waiting_approval"].includes(action.status)
   );
+  const enabledIntegrations = data.integrations.filter(isEnabled);
   const unhealthyIntegrations = data.integrations.filter(
     (integration) => integration.enabled && !["ready", "ok"].includes(integration.status)
   );
+  const overdueJobs = data.jobs.filter((job) => job.enabled && isPast(job.next_run_at));
   const posture =
-    criticalFindings > 0 || pendingApprovals.length > 0
-      ? "Action required"
-      : latestReport
-        ? "Stable"
-        : "Awaiting first scan";
+    criticalFindings > 0
+      ? "Critical"
+      : pendingApprovals.length > 0 || unhealthyIntegrations.length > 0 || overdueJobs.length > 0
+        ? "Warning"
+        : latestReport
+          ? "Stable"
+          : "Awaiting scan";
+  const environment = data.health.details?.environment ?? null;
 
   async function refresh(quiet = false) {
     setLoading(true);
@@ -290,42 +308,46 @@ function App() {
 
         <main className="min-w-0 px-4 py-4 sm:px-6 lg:px-8">
           <TopStatusBar
+            environment={environment}
             health={data.health.status}
             lastScan={latestReport?.generated_at ?? null}
             loading={loading}
             onRefresh={() => refresh()}
             onRunScan={onRunScan}
+            posture={posture}
+            riskScore={selectedReport ? Math.round(selectedReport.risk_score) : null}
           />
 
           <div className="mx-auto max-w-[1480px] space-y-6" id="overview">
             <PostureSummary
               criticalFindings={criticalFindings}
-              lastScan={latestReport?.generated_at ?? null}
+              enabledIntegrations={enabledIntegrations.length}
+              overdueJobs={overdueJobs.length}
               pendingApprovals={pendingApprovals.length}
-              posture={posture}
+              scheduledJobs={data.jobs.length}
               unhealthyIntegrations={unhealthyIntegrations.length}
             />
 
             <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_370px]">
               <div className="space-y-5">
                 <IncidentSpotlight
+                  environment={environment}
                   finding={urgentFinding}
+                  onOpenFindings={() => setActiveTab("findings")}
                   report={selectedReport}
                   onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
-                  onSelectTab={() => setActiveTab("findings")}
                 />
                 <PriorityQueue
-                  actions={pendingApprovals}
+                  criticalFindings={criticalFindings}
                   finding={urgentFinding}
-                  integrations={unhealthyIntegrations.length}
+                  integrations={unhealthyIntegrations}
+                  jobs={overdueJobs}
+                  pendingApprovals={pendingApprovals}
                   report={selectedReport}
-                  onApprove={(actionId) =>
-                    perform("Remediation action approved", async () => {
-                      await approveAction(actionId);
-                      setActiveTab("remediation");
-                    })
-                  }
-                  onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
+                  onOpenFindings={() => setActiveTab("findings")}
+                  onOpenIntegrations={() => setActiveTab("integrations")}
+                  onOpenJobs={() => setActiveTab("jobs")}
+                  onOpenRemediation={() => setActiveTab("remediation")}
                 />
               </div>
 
@@ -339,6 +361,7 @@ function App() {
                 kubernetesStatus={kubernetesStatus}
                 loading={loading}
                 namespaces={namespaces}
+                pendingApprovals={pendingApprovals.length}
                 scanAutoRemediate={scanAutoRemediate}
                 onBaselineNameChange={setBaselineName}
                 onBaselineVersionChange={setBaselineVersion}
@@ -350,6 +373,7 @@ function App() {
                 onJobIntervalChange={setJobInterval}
                 onJobNameChange={setJobName}
                 onNamespacesChange={setNamespaces}
+                onOpenRemediation={() => setActiveTab("remediation")}
                 onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
                 onRunScan={onRunScan}
                 onScanAutoRemediateChange={setScanAutoRemediate}

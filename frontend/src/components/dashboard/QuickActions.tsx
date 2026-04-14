@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 
 import type { Baseline } from "../../types";
 import { Button } from "../Button";
@@ -14,6 +14,7 @@ type QuickActionsProps = {
   kubernetesStatus: string;
   loading: boolean;
   namespaces: string;
+  pendingApprovals: number;
   scanAutoRemediate: boolean;
   onBaselineNameChange: (value: string) => void;
   onBaselineVersionChange: (value: string) => void;
@@ -25,6 +26,7 @@ type QuickActionsProps = {
   onJobIntervalChange: (value: string) => void;
   onJobNameChange: (value: string) => void;
   onNamespacesChange: (value: string) => void;
+  onOpenRemediation: () => void;
   onPlan: () => void;
   onRunScan: () => void;
   onScanAutoRemediateChange: (value: boolean) => void;
@@ -40,6 +42,7 @@ export function QuickActions({
   kubernetesStatus,
   loading,
   namespaces,
+  pendingApprovals,
   scanAutoRemediate,
   onBaselineNameChange,
   onBaselineVersionChange,
@@ -51,6 +54,7 @@ export function QuickActions({
   onJobIntervalChange,
   onJobNameChange,
   onNamespacesChange,
+  onOpenRemediation,
   onPlan,
   onRunScan,
   onScanAutoRemediateChange
@@ -60,10 +64,18 @@ export function QuickActions({
       <SectionHeader
         eyebrow="Quick actions"
         title="Operator commands"
-        description="Bias toward safe planning, approval, and repeatable scan workflows."
+        description="Run the next safe command without leaving the dashboard."
       />
       <div className="space-y-5 p-5">
-        <ActionBlock title="Scan">
+        <ActionBlock
+          action={
+            <Button disabled={loading || baselines.length === 0} onClick={onRunScan} variant="primary">
+              Run scan
+            </Button>
+          }
+          description={baselines.length ? `Using ${collectorText}` : "Capture a baseline first"}
+          title="Run drift scan"
+        >
           <Input
             label="Collectors"
             onChange={onCollectorTextChange}
@@ -79,46 +91,72 @@ export function QuickActions({
             />
             Auto-remediate after scan
           </label>
-          <Button disabled={loading || baselines.length === 0} onClick={onRunScan} variant="primary">
-            Run scan
-          </Button>
         </ActionBlock>
 
-        <ActionBlock title="Baseline">
+        <ActionBlock
+          action={
+            <Button disabled={loading} onClick={onCaptureBaseline}>
+              Capture baseline
+            </Button>
+          }
+          description={`${baselines.length} baseline${baselines.length === 1 ? "" : "s"} stored`}
+          title="Capture current state"
+        >
           <Input label="Name" onChange={onBaselineNameChange} value={baselineName} />
           <Input label="Version" onChange={onBaselineVersionChange} value={baselineVersion} />
-          <Button disabled={loading} onClick={onCaptureBaseline}>
-            Capture baseline
+        </ActionBlock>
+
+        <ActionBlock
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={loading} onClick={onPlan}>
+                Plan
+              </Button>
+              <Button disabled={loading} onClick={onExecute} variant="warning">
+                Execute approved
+              </Button>
+            </div>
+          }
+          description={
+            pendingApprovals
+              ? `${pendingApprovals} approval${pendingApprovals === 1 ? "" : "s"} waiting`
+              : "No approvals waiting"
+          }
+          title="Remediation"
+        >
+          <Button className="w-full" disabled={loading} onClick={onOpenRemediation} variant="ghost">
+            Open remediation queue
           </Button>
         </ActionBlock>
 
-        <ActionBlock title="Remediation">
-          <div className="grid grid-cols-2 gap-2">
-            <Button disabled={loading} onClick={onPlan}>
-              Plan
-            </Button>
-            <Button disabled={loading} onClick={onExecute} variant="warning">
-              Execute approved
-            </Button>
-          </div>
-        </ActionBlock>
-
-        <ActionBlock title="Kubernetes">
-          <Input label="Namespaces" onChange={onNamespacesChange} value={namespaces} />
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-slate-400">{kubernetesStatus}</p>
+        <ActionBlock
+          action={
             <Button disabled={loading} onClick={onCheckKubernetes}>
               Check
             </Button>
-          </div>
+          }
+          description={kubernetesStatus}
+          title="Kubernetes readiness"
+        >
+          <Input
+            label="Namespaces"
+            onChange={onNamespacesChange}
+            placeholder="default,platform"
+            value={namespaces}
+          />
         </ActionBlock>
 
-        <ActionBlock title="Schedule">
+        <ActionBlock
+          action={
+            <Button disabled={loading || baselines.length === 0} onClick={onCreateJob}>
+              Create job
+            </Button>
+          }
+          description="Create a recurring scan from the current inputs"
+          title="Schedule scans"
+        >
           <Input label="Job name" onChange={onJobNameChange} value={jobName} />
           <Input label="Interval seconds" onChange={onJobIntervalChange} value={jobInterval} />
-          <Button disabled={loading || baselines.length === 0} onClick={onCreateJob}>
-            Create job
-          </Button>
         </ActionBlock>
       </div>
     </Card>
@@ -126,13 +164,21 @@ export function QuickActions({
 }
 
 type ActionBlockProps = PropsWithChildren<{
+  action: ReactNode;
+  description: string;
   title: string;
 }>;
 
-function ActionBlock({ children, title }: ActionBlockProps) {
+function ActionBlock({ action, children, description, title }: ActionBlockProps) {
   return (
-    <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
+    <div className="rounded-2xl border border-white/5 bg-black/30 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
+        </div>
+        {action}
+      </div>
       <div className="mt-3 space-y-3">{children}</div>
     </div>
   );
