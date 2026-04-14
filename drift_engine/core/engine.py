@@ -125,6 +125,13 @@ class DriftEngine:
             if baseline is None:
                 raise BaselineNotFoundError(f"baseline {baseline_id!r} not found")
 
+            if self.baseline_manager.repair_legacy_signature(baseline):
+                await self.baselines.save(baseline)
+                logger.warning(
+                    "baseline_signature_repaired",
+                    baseline_id=baseline.id,
+                    baseline_name=baseline.name,
+                )
             self.baseline_manager.verify(baseline)
             snapshot, collector_results = await self.collect_state(
                 collector_names=collector_names,

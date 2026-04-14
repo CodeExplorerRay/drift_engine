@@ -128,7 +128,10 @@ def build_engine_from_repositories(
         baselines=baselines,
         snapshots=snapshots,
         reports=reports,
-        baseline_manager=BaselineManager(signing_secret=secret),
+        baseline_manager=BaselineManager(
+            signing_secret=secret,
+            allow_legacy_unsigned_repair=settings.environment in {"local", "test"},
+        ),
         policies=policies,
         policy_repository=policy_repository,
         audit_repository=audit_repository,

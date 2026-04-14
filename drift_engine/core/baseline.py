@@ -12,8 +12,14 @@ from drift_engine.utils.serialization import canonical_hash
 class BaselineManager:
     """Creates, validates, signs, and verifies immutable desired-state baselines."""
 
-    def __init__(self, signing_secret: str | None = None) -> None:
+    def __init__(
+        self,
+        signing_secret: str | None = None,
+        *,
+        allow_legacy_unsigned_repair: bool = False,
+    ) -> None:
         self.signing_secret = signing_secret
+        self.allow_legacy_unsigned_repair = allow_legacy_unsigned_repair
 
     def create(
         self,
@@ -77,6 +83,25 @@ class BaselineManager:
                 baseline.unsigned_document(), baseline.signature, self.signing_secret
             ):
                 raise BaselineValidationError("baseline signature verification failed")
+
+    def repair_legacy_signature(self, baseline: Baseline) -> bool:
+        """Upgrade an unsigned baseline when compatibility mode is enabled.
+
+        This is intentionally limited to local and test environments so
+        production-like deployments continue to enforce signed baselines
+        strictly.
+        """
+
+        if (
+            self.signing_secret is None
+            or baseline.signature is not None
+            or not self.allow_legacy_unsigned_repair
+        ):
+            return False
+
+        self.validate(baseline)
+        baseline.signature = sign_payload(baseline.unsigned_document(), self.signing_secret)
+        return True
 
     @staticmethod
     def normalize_resources(

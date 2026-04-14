@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from drift_engine.core.models import Baseline
 
 
 def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -157,9 +164,6 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_dashboard_asset_route_recovers_stale_hashed_asset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pytest.importorskip("fastapi")
-    from fastapi.testclient import TestClient
-
     from drift_engine.api.app import create_app
     from drift_engine.api.routes import ui
 
@@ -189,3 +193,61 @@ def test_dashboard_asset_route_recovers_stale_hashed_asset(
     asset = client.get("/assets/index-stalehash.js")
     assert asset.status_code == 200
     assert "console.log('live build');" in asset.text
+
+
+def test_drift_scan_repairs_legacy_unsigned_baseline_in_local_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("fastapi")
+
+    from config.settings import get_settings
+    from drift_engine.api.app import create_app
+    from drift_engine.api.dependencies import get_engine, get_metrics
+
+    monkeypatch.setenv("DRIFT_ENVIRONMENT", "local")
+    monkeypatch.setenv("DRIFT_STORAGE_BACKEND", "memory")
+    monkeypatch.setenv("DRIFT_BASELINE_SIGNING_SECRET", "local-test-secret")
+    monkeypatch.setenv("DRIFT_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("DRIFT_METRICS_ENABLED", "false")
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_metrics.cache_clear()
+
+    tracked_dir = Path("tests/.tmp") / f"legacy-baseline-{uuid4().hex}"
+    tracked_dir.mkdir(parents=True, exist_ok=True)
+    tracked_file = tracked_dir / "openssl.txt"
+    tracked_file.write_text("openssl=3.0.0", encoding="utf-8")
+    digest = hashlib.sha256(tracked_file.read_bytes()).hexdigest()
+
+    client = TestClient(create_app())
+    with client:
+        app = cast(FastAPI, client.app)
+        engine = app.state.drift_engine
+        baseline = Baseline(
+            name="legacy-prod",
+            resources={
+                f"local::_::_::file::{tracked_file}": {
+                    "resource_type": "file",
+                    "path": str(tracked_file),
+                    "exists": True,
+                    "is_file": True,
+                    "sha256": digest,
+                }
+            },
+        )
+        asyncio.run(engine.baselines.save(baseline))
+
+        response = client.post(
+            "/drifts/run",
+            json={
+                "baseline_id": baseline.id,
+                "collector_names": ["file"],
+                "scope": {"file_paths": [str(tracked_file)]},
+            },
+        )
+
+        assert response.status_code == 200
+
+        repaired = asyncio.run(engine.baselines.get(baseline.id))
+        assert repaired is not None
+        assert repaired.signature
