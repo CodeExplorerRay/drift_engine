@@ -10,9 +10,9 @@ pip install -e ".[dev]"
 drift-engine serve --reload
 ```
 
-Open the browser dashboard at `http://127.0.0.1:8080/`.
+Open the browser dashboard at `http://localhost:8080/`.
 
-The API console is still available at `http://127.0.0.1:8080/docs`. In production, use scoped `DRIFT_SERVICE_ACCOUNTS`, a strong `DRIFT_BASELINE_SIGNING_SECRET`, durable Postgres storage, and explicit Alembic migrations.
+The API console is still available at `http://localhost:8080/docs`. In production, use scoped `DRIFT_SERVICE_ACCOUNTS`, a strong `DRIFT_BASELINE_SIGNING_SECRET`, durable Postgres storage, and explicit Alembic migrations.
 
 For Windows PowerShell, use this instead of `cp`:
 
@@ -32,10 +32,10 @@ docker compose ps
 
 Useful local links:
 
-- Dashboard: `http://127.0.0.1:8080/`
-- API docs: `http://127.0.0.1:8080/docs`
-- Liveness: `http://127.0.0.1:8080/health/live`
-- Readiness: `http://127.0.0.1:8080/health/ready`
+- Dashboard: `http://localhost:8080/`
+- API docs: `http://localhost:8080/docs`
+- Liveness: `http://localhost:8080/health/live`
+- Readiness: `http://localhost:8080/health/ready`
 
 The Docker profile uses `DRIFT_STORAGE_BACKEND=postgres` and stores baselines, snapshots, drift reports, and custom policies in Postgres. `DRIFT_AUTO_CREATE_SCHEMA=true` is enabled for local Docker convenience; production deployments should run Alembic migrations explicitly instead.
 
@@ -85,7 +85,7 @@ DRIFT_KUBERNETES_NAMESPACES=drift-demo
 drift-engine serve --reload
 ```
 
-Then open `http://127.0.0.1:8080/`, enter `drift-demo` in Kubernetes namespaces, click **Check Kubernetes integration**, select the Kubernetes collector, and capture a baseline.
+Then open `http://localhost:8080/`, enter `drift-demo` in Kubernetes namespaces, click **Check Kubernetes integration**, select the Kubernetes collector, and capture a baseline.
 
 Create drift:
 

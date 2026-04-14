@@ -10,6 +10,9 @@ coverage.xml
 htmlcov/
 tests/.tmp/
 .pip-audit-cache/
+frontend/node_modules/
+frontend/dist/
+drift_engine/api/static/dashboard/
 
 .env
 .env.*

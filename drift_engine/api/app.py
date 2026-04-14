@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from config.logging_config import configure_logging
 from config.settings import get_settings
@@ -88,6 +89,14 @@ def create_app() -> FastAPI:
     )
 
     register_exception_handlers(app)
+    dashboard_assets = ui.DASHBOARD_DIR / "assets"
+    if dashboard_assets.exists():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=str(dashboard_assets)),
+            name="dashboard-assets",
+        )
+
     app.include_router(ui.router)
     app.include_router(health.router)
     app.include_router(baselines.router)

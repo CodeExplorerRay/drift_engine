@@ -22,7 +22,7 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         if request.url.path in {"/", "/favicon.ico"} or request.url.path.startswith(
-            ("/health", "/metrics")
+            ("/assets", "/health", "/metrics")
         ):
             return await call_next(request)
 

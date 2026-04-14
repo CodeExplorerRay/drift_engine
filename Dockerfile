@@ -1,3 +1,13 @@
+FROM node:22-alpine AS frontend-build
+
+WORKDIR /frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend ./
+RUN npm run build
+
 FROM python:3.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,6 +24,7 @@ COPY pyproject.toml README.md* /app/
 COPY config /app/config
 COPY drift_engine /app/drift_engine
 COPY alembic /app/alembic
+COPY --from=frontend-build /drift_engine/api/static/dashboard /app/drift_engine/api/static/dashboard
 
 RUN pip install --upgrade pip \
     && pip install .
