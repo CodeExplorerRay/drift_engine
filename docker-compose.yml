@@ -10,30 +10,32 @@ services:
       elasticsearch:
         condition: service_healthy
     environment:
-      DRIFT_ENVIRONMENT: local
+      DRIFT_ENVIRONMENT: ${DRIFT_ENVIRONMENT:-local}
       DRIFT_STORAGE_BACKEND: postgres
-      DRIFT_AUTO_CREATE_SCHEMA: "true"
-      DRIFT_DATABASE_URL: postgresql+asyncpg://drift:drift@postgres:5432/drift
+      DRIFT_AUTO_CREATE_SCHEMA: ${DRIFT_AUTO_CREATE_SCHEMA:-true}
+      DRIFT_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drift}:${POSTGRES_PASSWORD:-drift}@postgres:5432/${POSTGRES_DB:-drift}
       DRIFT_REDIS_URL: redis://redis:6379/0
       DRIFT_ELASTICSEARCH_URL: http://elasticsearch:9200
-      DRIFT_API_KEYS: local-dev-key
-      DRIFT_SERVICE_ACCOUNTS: '[{"id":"local-admin","key":"local-dev-key","scopes":["*"]}]'
-      DRIFT_AUTH_REQUIRED: "false"
-      DRIFT_SCHEDULER_ENABLED: "true"
-      DRIFT_LOG_LEVEL: INFO
+      DRIFT_API_KEYS: ${DRIFT_API_KEYS:-local-dev-key}
+      DRIFT_AUTH_REQUIRED: ${DRIFT_AUTH_REQUIRED:-false}
+      DRIFT_SCHEDULER_ENABLED: ${DRIFT_SCHEDULER_ENABLED:-true}
+      DRIFT_LOG_LEVEL: ${DRIFT_LOG_LEVEL:-INFO}
+      DRIFT_BASELINE_SIGNING_SECRET: ${DRIFT_BASELINE_SIGNING_SECRET:-local-dev-signing-secret}
+      DRIFT_ENABLED_INTEGRATIONS: ${DRIFT_ENABLED_INTEGRATIONS:-}
+      DRIFT_KUBERNETES_NAMESPACES: ${DRIFT_KUBERNETES_NAMESPACES:-}
     ports:
-      - "8080:8080"
+      - "${DRIFT_PORT:-8080}:8080"
     volumes:
       - ./baselines:/app/baselines:ro
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: drift
-      POSTGRES_USER: drift
-      POSTGRES_PASSWORD: drift
+      POSTGRES_DB: ${POSTGRES_DB:-drift}
+      POSTGRES_USER: ${POSTGRES_USER:-drift}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-drift}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U drift -d drift"]
       interval: 10s
@@ -45,7 +47,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -59,7 +61,7 @@ services:
       xpack.security.enabled: "false"
       ES_JAVA_OPTS: -Xms512m -Xmx512m
     ports:
-      - "9200:9200"
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1"]
       interval: 15s

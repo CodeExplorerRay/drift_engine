@@ -5,6 +5,7 @@ System Drift Engine continuously collects infrastructure state, compares it to s
 ## Quick Start
 
 ```bash
+cp .env.example .env
 pip install -e ".[dev]"
 drift-engine serve --reload
 ```
@@ -12,6 +13,14 @@ drift-engine serve --reload
 Open the browser dashboard at `http://127.0.0.1:8080/`.
 
 The API console is still available at `http://127.0.0.1:8080/docs`. In production, use scoped `DRIFT_SERVICE_ACCOUNTS`, a strong `DRIFT_BASELINE_SIGNING_SECRET`, durable Postgres storage, and explicit Alembic migrations.
+
+For Windows PowerShell, use this instead of `cp`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The local `.env` file is ignored by git. It is for development-only defaults such as `local-dev-key`, local ports, and optional integration toggles.
 
 ## Docker
 
