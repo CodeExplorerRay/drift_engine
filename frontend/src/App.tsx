@@ -19,7 +19,7 @@ import { PostureSummary } from "./components/dashboard/PostureSummary";
 import { PriorityQueue } from "./components/dashboard/PriorityQueue";
 import { QuickActions } from "./components/dashboard/QuickActions";
 import { TopStatusBar } from "./components/dashboard/TopStatusBar";
-import { findingTotal, formatTime, shortId } from "./components/dashboard/shared";
+import { findingTotal, formatTime, relativeTime, shortId } from "./components/dashboard/shared";
 import { EmptyState } from "./components/EmptyState";
 import type {
   Baseline,
@@ -42,6 +42,8 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "integrations", label: "Integrations" },
   { id: "audit", label: "Audit" }
 ];
+
+type TabCounts = Record<Tab, number>;
 
 const initialData: DashboardData = {
   health: {
@@ -89,6 +91,31 @@ function isEnabled(integration: Integration): boolean {
   return integration.enabled;
 }
 
+function countTabs(data: DashboardData, selectedReport: DriftReport | null): TabCounts {
+  return {
+    findings: findingTotal(selectedReport),
+    reports: data.reports.length,
+    remediation: data.actions.length,
+    baselines: data.baselines.length,
+    jobs: data.jobs.length,
+    integrations: data.integrations.length,
+    audit: data.audit.length
+  };
+}
+
+function riskTone(score: number | null): "danger" | "warning" | "good" | "info" {
+  if (score === null) {
+    return "info";
+  }
+  if (score >= 70) {
+    return "danger";
+  }
+  if (score >= 35) {
+    return "warning";
+  }
+  return "good";
+}
+
 function selectMostUrgentFinding(report: DriftReport | null): DriftFinding | null {
   if (!report || report.findings.length === 0) {
     return null;
@@ -133,6 +160,8 @@ function App() {
           ? "Stable"
           : "Awaiting scan";
   const environment = data.health.details?.environment ?? null;
+  const riskScore = selectedReport ? Math.round(selectedReport.risk_score) : null;
+  const tabCounts = countTabs(data, selectedReport);
 
   async function refresh(quiet = false) {
     setLoading(true);
@@ -271,17 +300,51 @@ function App() {
             </div>
           </div>
 
+          <div className="mt-5 rounded-2xl border border-white/5 bg-black/25 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Live posture
+              </p>
+              <span
+                className={[
+                  "h-2 w-2 rounded-full",
+                  posture === "Critical"
+                    ? "bg-red-400"
+                    : posture === "Warning"
+                      ? "bg-amber-300"
+                      : posture === "Stable"
+                        ? "bg-emerald-300"
+                        : "bg-sky-300"
+                ].join(" ")}
+              />
+            </div>
+            <p className="mt-3 text-lg font-semibold tracking-[-0.03em] text-white">{posture}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+              <div className="rounded-xl bg-white/[0.03] px-3 py-2">
+                <p className="text-slate-500">Risk</p>
+                <p className="mt-1 font-semibold text-slate-200">{riskScore ?? "None"}</p>
+              </div>
+              <div className="rounded-xl bg-white/[0.03] px-3 py-2">
+                <p className="text-slate-500">Findings</p>
+                <p className="mt-1 font-semibold text-slate-200">{tabCounts.findings}</p>
+              </div>
+            </div>
+          </div>
+
           <nav aria-label="Primary navigation" className="mt-6 space-y-1 text-sm">
             <a
-              className="flex rounded-xl px-4 py-3 font-medium text-white bg-white/10"
+              className="flex items-center justify-between rounded-xl px-4 py-3 font-medium text-white bg-white/10"
               href="#overview"
             >
-              Overview
+              <span>Overview</span>
+              <span className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[11px] font-bold text-sky-300">
+                Live
+              </span>
             </a>
             {tabs.map((tab) => (
               <button
                 className={[
-                  "flex w-full rounded-xl px-4 py-3 text-left font-medium transition",
+                  "flex w-full items-center justify-between rounded-xl px-4 py-3 text-left font-medium transition",
                   activeTab === tab.id
                     ? "bg-white/10 text-white"
                     : "text-slate-400 hover:bg-white/5 hover:text-white"
@@ -290,7 +353,15 @@ function App() {
                 onClick={() => setActiveTab(tab.id)}
                 type="button"
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                <span
+                  className={[
+                    "rounded-full px-2 py-0.5 text-[11px] font-bold",
+                    activeTab === tab.id ? "bg-white/10 text-white" : "bg-black/30 text-slate-500"
+                  ].join(" ")}
+                >
+                  {tabCounts[tab.id]}
+                </span>
               </button>
             ))}
           </nav>
@@ -302,6 +373,9 @@ function App() {
             <p className="mt-2 text-sm font-semibold text-white">{notice}</p>
             <p className="mt-2 text-xs leading-5 text-slate-400">
               API {data.health.status} · Storage {data.health.details?.storage_backend ?? "unknown"}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Last scan {relativeTime(latestReport?.generated_at ?? null)}
             </p>
           </div>
         </aside>
@@ -315,7 +389,7 @@ function App() {
             onRefresh={() => refresh()}
             onRunScan={onRunScan}
             posture={posture}
-            riskScore={selectedReport ? Math.round(selectedReport.risk_score) : null}
+            riskScore={riskScore}
           />
 
           <div className="mx-auto max-w-[1480px] space-y-6" id="overview">
@@ -387,6 +461,7 @@ function App() {
               selectedReportId={selectedReport?.id ?? null}
               setActiveTab={setActiveTab}
               setSelectedReportId={setSelectedReportId}
+              tabCounts={tabCounts}
               onApprove={(actionId) =>
                 perform("Remediation action approved", async () => {
                   await approveAction(actionId);
@@ -417,6 +492,7 @@ function EvidenceTabs({
   selectedReportId,
   setActiveTab,
   setSelectedReportId,
+  tabCounts,
   onApprove,
   onExecute,
   onPlan,
@@ -428,31 +504,70 @@ function EvidenceTabs({
   selectedReportId: string | null;
   setActiveTab: (tab: Tab) => void;
   setSelectedReportId: (reportId: string) => void;
+  tabCounts: TabCounts;
   onApprove: (actionId: string) => void;
   onExecute: (reportId: string | null) => void;
   onPlan: (reportId: string | null) => void;
   onRunJob: (jobId: string) => void;
 }) {
+  const selectedRisk = selectedReport ? Math.round(selectedReport.risk_score) : null;
+  const generatedAt = selectedReport?.generated_at ?? null;
+
   return (
     <Card className="overflow-hidden" id="evidence-tabs">
-      <div className="border-b border-white/5 px-5 pt-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-          Evidence tabs
-        </p>
-        <div className="mt-3 flex gap-1 overflow-x-auto">
+      <div className="border-b border-white/5 px-5 pt-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Evidence
+            </p>
+            <h2 className="mt-1 text-lg font-semibold tracking-[-0.03em] text-white">
+              Selected report workspace
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              {selectedReport
+                ? `Report ${shortId(selectedReport.id, 22)} · baseline ${shortId(
+                    selectedReport.baseline_id,
+                    22
+                  )} · generated ${formatTime(generatedAt)}`
+                : "Run a scan to populate findings, reports, remediation, and audit evidence."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={riskTone(selectedRisk)}>
+              {selectedRisk === null ? "No Risk" : `Risk ${selectedRisk}`}
+            </Badge>
+            <Badge tone={tabCounts.findings ? "warning" : "good"}>
+              {`${tabCounts.findings} Findings`}
+            </Badge>
+            <Badge tone={data.actions.length ? "warning" : "neutral"}>
+              {`${data.actions.length} Actions`}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-4">
           {tabs.map((tab) => (
             <button
               className={[
-                "border-b-2 px-3 py-3 text-sm font-semibold transition",
+                "inline-flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition",
                 activeTab === tab.id
-                  ? "border-sky-400 text-white"
-                  : "border-transparent text-slate-400 hover:text-white"
+                  ? "border-sky-400/40 bg-sky-400/10 text-white"
+                  : "border-white/5 bg-black/20 text-slate-400 hover:border-white/10 hover:bg-white/5 hover:text-white"
               ].join(" ")}
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               type="button"
             >
-              {tab.label}
+              <span>{tab.label}</span>
+              <span
+                className={[
+                  "rounded-full px-2 py-0.5 text-[11px] font-bold",
+                  activeTab === tab.id ? "bg-sky-300/15 text-sky-200" : "bg-white/5 text-slate-500"
+                ].join(" ")}
+              >
+                {tabCounts[tab.id]}
+              </span>
             </button>
           ))}
         </div>
