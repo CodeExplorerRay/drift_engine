@@ -402,15 +402,16 @@ function App() {
               unhealthyIntegrations={unhealthyIntegrations.length}
             />
 
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_370px]">
-              <div className="space-y-5">
-                <IncidentSpotlight
-                  environment={environment}
-                  finding={urgentFinding}
-                  onOpenFindings={() => setActiveTab("findings")}
-                  report={selectedReport}
-                  onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
-                />
+            <section className="space-y-6">
+              <IncidentSpotlight
+                environment={environment}
+                finding={urgentFinding}
+                onOpenFindings={() => setActiveTab("findings")}
+                report={selectedReport}
+                onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
+              />
+
+              <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_370px]">
                 <PriorityQueue
                   criticalFindings={criticalFindings}
                   finding={urgentFinding}
@@ -423,35 +424,35 @@ function App() {
                   onOpenJobs={() => setActiveTab("jobs")}
                   onOpenRemediation={() => setActiveTab("remediation")}
                 />
-              </div>
 
-              <QuickActions
-                baselineName={baselineName}
-                baselineVersion={baselineVersion}
-                baselines={data.baselines}
-                collectorText={collectorText}
-                jobInterval={jobInterval}
-                jobName={jobName}
-                kubernetesStatus={kubernetesStatus}
-                loading={loading}
-                namespaces={namespaces}
-                pendingApprovals={pendingApprovals.length}
-                scanAutoRemediate={scanAutoRemediate}
-                onBaselineNameChange={setBaselineName}
-                onBaselineVersionChange={setBaselineVersion}
-                onCaptureBaseline={onCaptureBaseline}
-                onCheckKubernetes={onCheckKubernetes}
-                onCollectorTextChange={setCollectorText}
-                onCreateJob={onCreateJob}
-                onExecute={() => onExecuteRemediation(selectedReport?.id ?? null)}
-                onJobIntervalChange={setJobInterval}
-                onJobNameChange={setJobName}
-                onNamespacesChange={setNamespaces}
-                onOpenRemediation={() => setActiveTab("remediation")}
-                onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
-                onRunScan={onRunScan}
-                onScanAutoRemediateChange={setScanAutoRemediate}
-              />
+                <QuickActions
+                  baselineName={baselineName}
+                  baselineVersion={baselineVersion}
+                  baselines={data.baselines}
+                  collectorText={collectorText}
+                  jobInterval={jobInterval}
+                  jobName={jobName}
+                  kubernetesStatus={kubernetesStatus}
+                  loading={loading}
+                  namespaces={namespaces}
+                  pendingApprovals={pendingApprovals.length}
+                  scanAutoRemediate={scanAutoRemediate}
+                  onBaselineNameChange={setBaselineName}
+                  onBaselineVersionChange={setBaselineVersion}
+                  onCaptureBaseline={onCaptureBaseline}
+                  onCheckKubernetes={onCheckKubernetes}
+                  onCollectorTextChange={setCollectorText}
+                  onCreateJob={onCreateJob}
+                  onExecute={() => onExecuteRemediation(selectedReport?.id ?? null)}
+                  onJobIntervalChange={setJobInterval}
+                  onJobNameChange={setJobName}
+                  onNamespacesChange={setNamespaces}
+                  onOpenRemediation={() => setActiveTab("remediation")}
+                  onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
+                  onRunScan={onRunScan}
+                  onScanAutoRemediateChange={setScanAutoRemediate}
+                />
+              </div>
             </section>
 
             <EvidenceTabs

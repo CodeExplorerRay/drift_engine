@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import { useState, type PropsWithChildren, type ReactNode } from "react";
 
 import type { Baseline } from "../../types";
 import { Button } from "../Button";
@@ -66,13 +66,14 @@ export function QuickActions({
         title="Operator commands"
         description="Run the next safe command without leaving the dashboard."
       />
-      <div className="space-y-5 p-5">
+      <div className="space-y-3 p-5">
         <ActionBlock
           action={
             <Button disabled={loading || baselines.length === 0} onClick={onRunScan} variant="primary">
               Run scan
             </Button>
           }
+          defaultOpen
           description={baselines.length ? `Using ${collectorText}` : "Capture a baseline first"}
           title="Run drift scan"
         >
@@ -117,6 +118,7 @@ export function QuickActions({
               </Button>
             </div>
           }
+          defaultOpen={pendingApprovals > 0}
           description={
             pendingApprovals
               ? `${pendingApprovals} approval${pendingApprovals === 1 ? "" : "s"} waiting`
@@ -165,21 +167,39 @@ export function QuickActions({
 
 type ActionBlockProps = PropsWithChildren<{
   action: ReactNode;
+  defaultOpen?: boolean;
   description: string;
   title: string;
 }>;
 
-function ActionBlock({ action, children, description, title }: ActionBlockProps) {
+function ActionBlock({ action, children, defaultOpen = false, description, title }: ActionBlockProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
   return (
     <div className="rounded-2xl border border-white/5 bg-black/30 p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <button
+          aria-expanded={isOpen}
+          className="min-w-0 flex-1 text-left"
+          onClick={() => setIsOpen((current) => !current)}
+          type="button"
+        >
+          <span className="flex items-center gap-2">
+            <span
+              className={[
+                "grid h-5 w-5 place-items-center rounded-full border border-white/10 text-[11px] text-slate-400 transition",
+                isOpen ? "rotate-90 bg-white/5 text-white" : "bg-black/20"
+              ].join(" ")}
+            >
+              {">"}
+            </span>
+            <span className="truncate text-sm font-semibold text-white">{title}</span>
+          </span>
           <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
-        </div>
+        </button>
         {action}
       </div>
-      <div className="mt-3 space-y-3">{children}</div>
+      {isOpen ? <div className="mt-3 space-y-3">{children}</div> : null}
     </div>
   );
 }
