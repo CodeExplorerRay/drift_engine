@@ -214,6 +214,15 @@ function selectMostUrgentFinding(report: DriftReport | null): DriftFinding | nul
   return [...trustedFindings].sort((left, right) => right.risk_score - left.risk_score)[0];
 }
 
+function scrollToDashboardSection(sectionId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function App() {
   const [data, setData] = useState<DashboardData>(initialData);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
@@ -441,6 +450,11 @@ function App() {
     );
   }
 
+  function openEvidenceTab(tab: Tab) {
+    setActiveTab(tab);
+    scrollToDashboardSection("evidence-tabs");
+  }
+
   return (
     <div className="min-h-screen bg-[#0b0f14] text-slate-200">
       <div className="grid min-h-screen lg:grid-cols-[288px_minmax(0,1fr)]">
@@ -576,7 +590,7 @@ function App() {
               <IncidentSpotlight
                 environment={environment}
                 finding={urgentFinding}
-                onOpenFindings={() => setActiveTab("findings")}
+                onOpenFindings={() => openEvidenceTab("findings")}
                 report={selectedReport}
                 onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
               />
@@ -589,10 +603,10 @@ function App() {
                   jobs={overdueJobs}
                   pendingApprovals={pendingApprovals}
                   report={selectedReport}
-                  onOpenFindings={() => setActiveTab("findings")}
-                  onOpenIntegrations={() => setActiveTab("integrations")}
-                  onOpenJobs={() => setActiveTab("jobs")}
-                  onOpenRemediation={() => setActiveTab("remediation")}
+                  onOpenFindings={() => openEvidenceTab("findings")}
+                  onOpenIntegrations={() => openEvidenceTab("integrations")}
+                  onOpenJobs={() => openEvidenceTab("jobs")}
+                  onOpenRemediation={() => openEvidenceTab("remediation")}
                 />
 
                 <QuickActions
@@ -624,7 +638,7 @@ function App() {
                   onJobIntervalChange={setJobInterval}
                   onJobNameChange={setJobName}
                   onNamespacesChange={setNamespaces}
-                  onOpenRemediation={() => setActiveTab("remediation")}
+                  onOpenRemediation={() => openEvidenceTab("remediation")}
                   onPlan={() => onPlanRemediation(selectedReport?.id ?? null)}
                   onRunScan={onRunScan}
                   onScanAutoRemediateChange={setScanAutoRemediate}
@@ -751,7 +765,7 @@ function EvidenceTabs({
   const generatedAt = selectedReport?.generated_at ?? null;
 
   return (
-    <Card className="overflow-hidden" id="evidence-tabs">
+    <Card className="overflow-hidden scroll-mt-28" id="evidence-tabs">
       <div className="border-b border-white/5 px-5 pt-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
