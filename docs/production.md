@@ -7,6 +7,7 @@ This guide describes a hardened production deployment for System Drift Engine.
 - Run with `DRIFT_ENVIRONMENT=production`.
 - Keep `DRIFT_AUTH_REQUIRED=true`.
 - Keep `DRIFT_ALLOW_DEV_AUTH=false`; the app rejects this flag outside local development.
+- Set `DRIFT_CORS_ORIGINS` to the exact dashboard/API origins allowed to call the service.
 - Set `DRIFT_SERVICE_ACCOUNTS` to scoped service account JSON.
 - Set `DRIFT_BASELINE_SIGNING_SECRET` to a strong random value.
 - Set `DRIFT_AUTO_CREATE_SCHEMA=false` and run Alembic migrations before rollout.
