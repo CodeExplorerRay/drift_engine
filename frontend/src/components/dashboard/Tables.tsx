@@ -86,16 +86,20 @@ export function FindingsTable({
 }
 
 export function ReportsTable({
+  canExecuteRemediation,
   error,
   executionLabel,
+  loading,
   reports,
   selectedReportId,
   setSelectedReportId,
   onExecute,
   onPlan
 }: {
+  canExecuteRemediation: boolean;
   error: string | null;
   executionLabel: string;
+  loading: boolean;
   reports: DriftReport[];
   selectedReportId: string | null;
   setSelectedReportId: (reportId: string) => void;
@@ -138,11 +142,21 @@ export function ReportsTable({
               <td className="px-4 py-4 text-slate-300">{formatTime(report.generated_at)}</td>
               <td className="py-4 pl-4">
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setSelectedReportId(report.id)} variant="ghost">
+                  <Button
+                    disabled={loading || report.id === selectedReportId}
+                    onClick={() => setSelectedReportId(report.id)}
+                    variant="ghost"
+                  >
                     {report.id === selectedReportId ? "Selected" : "Select"}
                   </Button>
-                  <Button onClick={() => onPlan(report.id)}>Plan</Button>
-                  <Button onClick={() => onExecute(report.id)} variant="warning">
+                  <Button disabled={loading} onClick={() => onPlan(report.id)}>
+                    Plan
+                  </Button>
+                  <Button
+                    disabled={loading || !canExecuteRemediation}
+                    onClick={() => onExecute(report.id)}
+                    variant="warning"
+                  >
                     {executionLabel}
                   </Button>
                 </div>
@@ -157,16 +171,20 @@ export function ReportsTable({
 
 export function RemediationTable({
   actions,
+  canExecuteRemediation,
   error,
   executionLabel,
+  loading,
   remediationCapability,
   reports,
   onApprove,
   onExecute
 }: {
   actions: RemediationAction[];
+  canExecuteRemediation: boolean;
   error: string | null;
   executionLabel: string;
+  loading: boolean;
   remediationCapability: RemediationCapability;
   reports: DriftReport[];
   onApprove: (actionId: string) => void;
@@ -198,6 +216,21 @@ export function RemediationTable({
       {actions.map((action) => {
         const reportId = reportForAction(action, reports);
         const isApproved = ["approved", "skipped", "succeeded"].includes(action.status);
+        const canApproveAction = action.requires_approval && !isApproved;
+        const canExecuteAction =
+          canExecuteRemediation &&
+          Boolean(reportId) &&
+          (!action.requires_approval || isApproved);
+        const approveLabel = !action.requires_approval
+          ? "Approval not required"
+          : isApproved
+            ? "Approved"
+            : "Approve action";
+        const executeLabel = !reportId
+          ? "Report unavailable"
+          : action.requires_approval && !isApproved
+            ? "Approve before execute"
+            : executionLabel;
         return (
           <div
             className="grid gap-4 rounded-2xl border border-white/5 bg-black/20 p-4 lg:grid-cols-[1fr_auto]"
@@ -216,11 +249,15 @@ export function RemediationTable({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button disabled={isApproved} onClick={() => onApprove(action.id)}>
-                Approve action
+              <Button disabled={loading || !canApproveAction} onClick={() => onApprove(action.id)}>
+                {approveLabel}
               </Button>
-              <Button onClick={() => onExecute(reportId)} variant="warning">
-                {executionLabel}
+              <Button
+                disabled={loading || !canExecuteAction}
+                onClick={() => onExecute(reportId)}
+                variant="warning"
+              >
+                {executeLabel}
               </Button>
             </div>
           </div>
@@ -283,10 +320,12 @@ export function BaselinesTable({
 export function JobsTable({
   error,
   jobs,
+  loading,
   onRunJob
 }: {
   error: string | null;
   jobs: ScheduledJob[];
+  loading: boolean;
   onRunJob: (jobId: string) => void;
 }) {
   if (error) {
@@ -318,7 +357,9 @@ export function JobsTable({
               <td className="px-4 py-4 text-slate-300">{formatTime(job.next_run_at)}</td>
               <td className="px-4 py-4 text-slate-300">{formatTime(job.last_run_at)}</td>
               <td className="py-4 pl-4">
-                <Button onClick={() => onRunJob(job.id)}>Run now</Button>
+                <Button disabled={loading} onClick={() => onRunJob(job.id)}>
+                  Run now
+                </Button>
               </td>
             </tr>
           ))}

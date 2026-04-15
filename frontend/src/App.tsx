@@ -244,6 +244,25 @@ function App() {
   const overdueJobs = data.jobs.filter((job) => job.enabled && isPast(job.next_run_at));
   const dashboardErrors = Object.entries(data.errors);
   const partialScan = scanIsPartial(selectedReport);
+  const selectedBaselineId = selectedReport?.baseline_id ?? data.baselines[0]?.id ?? null;
+  const trimmedBaselineName = baselineName.trim();
+  const trimmedBaselineVersion = baselineVersion.trim() || "1.0.0";
+  const trimmedJobName = jobName.trim();
+  const collectorNames = splitCsv(collectorText);
+  const hasValidCollectorSelection = (collectorNames?.length ?? 0) <= 20;
+  const parsedJobInterval = Number(jobInterval.trim());
+  const hasValidJobInterval = Number.isInteger(parsedJobInterval) && parsedJobInterval >= 1;
+  const canCaptureBaseline = !loading && trimmedBaselineName.length > 0 && hasValidCollectorSelection;
+  const canRunScan = !loading && Boolean(selectedBaselineId) && hasValidCollectorSelection;
+  const canCreateJob =
+    !loading &&
+    Boolean(selectedBaselineId) &&
+    trimmedJobName.length > 0 &&
+    hasValidCollectorSelection &&
+    hasValidJobInterval;
+  const canPlanRemediation = !loading && Boolean(selectedReport?.id);
+  const canExecuteRemediation =
+    !loading && Boolean(selectedReport?.id) && data.remediationCapability.can_execute;
   const executionLabel = data.remediationCapability.simulation_only
     ? "Simulate execution"
     : "Execute approved";
@@ -309,25 +328,36 @@ function App() {
   }
 
   async function onCaptureBaseline() {
+    if (!trimmedBaselineName) {
+      setActivityNotice("Baseline name is required");
+      return;
+    }
+    if (!hasValidCollectorSelection) {
+      setActivityNotice("Select 20 collectors or fewer per request");
+      return;
+    }
     await perform("Baseline captured", async () => {
       await captureBaseline({
-        name: baselineName,
-        version: baselineVersion,
-        collector_names: splitCsv(collectorText)
+        name: trimmedBaselineName,
+        version: trimmedBaselineVersion,
+        collector_names: collectorNames
       });
     });
   }
 
   async function onRunScan() {
-    const baselineId = selectedReport?.baseline_id ?? data.baselines[0]?.id;
-    if (!baselineId) {
+    if (!selectedBaselineId) {
       setActivityNotice("Create a baseline before running a scan");
+      return;
+    }
+    if (!hasValidCollectorSelection) {
+      setActivityNotice("Select 20 collectors or fewer per request");
       return;
     }
     await perform("Drift scan completed", async () => {
       const report = await runDriftScan({
-        baseline_id: baselineId,
-        collector_names: splitCsv(collectorText),
+        baseline_id: selectedBaselineId,
+        collector_names: collectorNames,
         auto_remediate: scanAutoRemediate
       });
       setSelectedReportId(report.id);
@@ -336,17 +366,28 @@ function App() {
   }
 
   async function onCreateJob() {
-    const baselineId = selectedReport?.baseline_id ?? data.baselines[0]?.id;
-    if (!baselineId) {
-      setNotice("Create a baseline before scheduling a job");
+    if (!selectedBaselineId) {
+      setActivityNotice("Create a baseline before scheduling a job");
+      return;
+    }
+    if (!trimmedJobName) {
+      setActivityNotice("Job name is required");
+      return;
+    }
+    if (!hasValidCollectorSelection) {
+      setActivityNotice("Select 20 collectors or fewer per request");
+      return;
+    }
+    if (!hasValidJobInterval) {
+      setActivityNotice("Interval seconds must be a positive whole number");
       return;
     }
     await perform("Scheduled job created", async () => {
       await createJob({
-        name: jobName,
-        baseline_id: baselineId,
-        interval_seconds: Number(jobInterval || 3600),
-        collector_names: splitCsv(collectorText)
+        name: trimmedJobName,
+        baseline_id: selectedBaselineId,
+        interval_seconds: parsedJobInterval,
+        collector_names: collectorNames
       });
     });
   }
@@ -361,9 +402,9 @@ function App() {
           ? `Ready on ${result.context ?? "current context"}`
           : `${failed.length || 1} check needs attention`
       );
-      setNotice("Kubernetes readiness checked");
+      setActivityNotice("Kubernetes readiness checked");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Kubernetes check failed");
+      setActivityNotice(error instanceof Error ? error.message : "Kubernetes check failed");
     } finally {
       setLoading(false);
     }
@@ -371,7 +412,7 @@ function App() {
 
   async function onPlanRemediation(reportId: string | null) {
     if (!reportId) {
-      setNotice("Select a report before planning remediation");
+      setActivityNotice("Select a report before planning remediation");
       return;
     }
     await perform("Remediation plan prepared", async () => {
@@ -382,7 +423,11 @@ function App() {
 
   async function onExecuteRemediation(reportId: string | null) {
     if (!reportId) {
-      setNotice("Select a report before executing remediation");
+      setActivityNotice("Select a report before executing remediation");
+      return;
+    }
+    if (!data.remediationCapability.can_execute) {
+      setActivityNotice("Remediation execution is not available with the current executor");
       return;
     }
     await perform(
@@ -503,6 +548,7 @@ function App() {
             lastScan={latestReport?.generated_at ?? null}
             loading={loading}
             partialScan={partialScan}
+            canRunScan={canRunScan}
             onRefresh={() => refresh()}
             onRunScan={onRunScan}
             posture={posture}
@@ -561,6 +607,11 @@ function App() {
                   namespaces={namespaces}
                   pendingApprovals={pendingApprovals.length}
                   remediationCapability={data.remediationCapability}
+                  canCaptureBaseline={canCaptureBaseline}
+                  canCreateJob={canCreateJob}
+                  canExecute={canExecuteRemediation}
+                  canPlan={canPlanRemediation}
+                  canRunScan={canRunScan}
                   scanAutoRemediate={scanAutoRemediate}
                   executionLabel={executionLabel}
                   onBaselineNameChange={setBaselineName}
@@ -586,6 +637,7 @@ function App() {
               data={data}
               errors={data.errors}
               executionLabel={executionLabel}
+              loading={loading}
               remediationCapability={data.remediationCapability}
               selectedReport={selectedReport}
               selectedReportId={selectedReport?.id ?? null}
@@ -667,6 +719,7 @@ function EvidenceTabs({
   data,
   errors,
   executionLabel,
+  loading,
   remediationCapability,
   selectedReport,
   selectedReportId,
@@ -682,6 +735,7 @@ function EvidenceTabs({
   data: DashboardData;
   errors: Partial<Record<DashboardSection, string>>;
   executionLabel: string;
+  loading: boolean;
   remediationCapability: RemediationCapability;
   selectedReport: DriftReport | null;
   selectedReportId: string | null;
@@ -766,6 +820,8 @@ function EvidenceTabs({
           <ReportsTable
             error={errorFor(errors, "reports")}
             executionLabel={executionLabel}
+            canExecuteRemediation={remediationCapability.can_execute}
+            loading={loading}
             reports={data.reports}
             selectedReportId={selectedReportId}
             setSelectedReportId={setSelectedReportId}
@@ -776,8 +832,10 @@ function EvidenceTabs({
         {activeTab === "remediation" ? (
           <RemediationTable
             actions={data.actions}
+            canExecuteRemediation={remediationCapability.can_execute}
             error={errorFor(errors, "actions", "remediationCapability")}
             executionLabel={executionLabel}
+            loading={loading}
             remediationCapability={remediationCapability}
             reports={data.reports}
             onApprove={onApprove}
@@ -788,7 +846,7 @@ function EvidenceTabs({
           <BaselinesTable baselines={data.baselines} error={errorFor(errors, "baselines")} />
         ) : null}
         {activeTab === "jobs" ? (
-          <JobsTable error={errorFor(errors, "jobs")} jobs={data.jobs} onRunJob={onRunJob} />
+          <JobsTable error={errorFor(errors, "jobs")} jobs={data.jobs} loading={loading} onRunJob={onRunJob} />
         ) : null}
         {activeTab === "integrations" ? (
           <IntegrationsGrid data={data} error={errorFor(errors, "integrations")} />

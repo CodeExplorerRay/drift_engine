@@ -3,6 +3,7 @@ import { Button } from "../Button";
 import { relativeTime } from "./shared";
 
 type TopStatusBarProps = {
+  canRunScan: boolean;
   environment: string | null;
   health: string;
   lastScan: string | null;
@@ -15,6 +16,7 @@ type TopStatusBarProps = {
 };
 
 export function TopStatusBar({
+  canRunScan,
   environment,
   health,
   lastScan,
@@ -59,7 +61,7 @@ export function TopStatusBar({
           <Button disabled={loading} onClick={onRefresh} variant="ghost">
             {loading ? "Refreshing" : "Refresh"}
           </Button>
-          <Button disabled={loading} onClick={onRunScan} variant="primary">
+          <Button disabled={!canRunScan} onClick={onRunScan} variant="primary">
             Run Scan
           </Button>
         </div>

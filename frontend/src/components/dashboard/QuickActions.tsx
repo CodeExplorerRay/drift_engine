@@ -8,6 +8,11 @@ type QuickActionsProps = {
   baselineName: string;
   baselineVersion: string;
   baselines: Baseline[];
+  canCaptureBaseline: boolean;
+  canCreateJob: boolean;
+  canExecute: boolean;
+  canPlan: boolean;
+  canRunScan: boolean;
   collectorText: string;
   jobInterval: string;
   jobName: string;
@@ -38,6 +43,11 @@ export function QuickActions({
   baselineName,
   baselineVersion,
   baselines,
+  canCaptureBaseline,
+  canCreateJob,
+  canExecute,
+  canPlan,
+  canRunScan,
   collectorText,
   jobInterval,
   jobName,
@@ -72,8 +82,8 @@ export function QuickActions({
       />
       <div className="space-y-3 p-5">
         <ActionBlock
-          action={
-            <Button disabled={loading || baselines.length === 0} onClick={onRunScan} variant="primary">
+          actions={
+            <Button disabled={!canRunScan} onClick={onRunScan} variant="primary">
               Run scan
             </Button>
           }
@@ -99,8 +109,8 @@ export function QuickActions({
         </ActionBlock>
 
         <ActionBlock
-          action={
-            <Button disabled={loading} onClick={onCaptureBaseline}>
+          actions={
+            <Button disabled={!canCaptureBaseline} onClick={onCaptureBaseline}>
               Capture baseline
             </Button>
           }
@@ -112,15 +122,15 @@ export function QuickActions({
         </ActionBlock>
 
         <ActionBlock
-          action={
-            <div className="flex flex-wrap gap-2">
-              <Button disabled={loading} onClick={onPlan}>
+          actions={
+            <>
+              <Button disabled={!canPlan} onClick={onPlan}>
                 Plan
               </Button>
-              <Button disabled={loading || !remediationCapability.can_execute} onClick={onExecute} variant="warning">
+              <Button disabled={!canExecute} onClick={onExecute} variant="warning">
                 {executionLabel}
               </Button>
-            </div>
+            </>
           }
           defaultOpen={pendingApprovals > 0}
           description={
@@ -142,7 +152,7 @@ export function QuickActions({
         </ActionBlock>
 
         <ActionBlock
-          action={
+          actions={
             <Button disabled={loading} onClick={onCheckKubernetes}>
               Check
             </Button>
@@ -159,8 +169,8 @@ export function QuickActions({
         </ActionBlock>
 
         <ActionBlock
-          action={
-            <Button disabled={loading || baselines.length === 0} onClick={onCreateJob}>
+          actions={
+            <Button disabled={!canCreateJob} onClick={onCreateJob}>
               Create job
             </Button>
           }
@@ -176,40 +186,44 @@ export function QuickActions({
 }
 
 type ActionBlockProps = PropsWithChildren<{
-  action: ReactNode;
+  actions?: ReactNode;
   defaultOpen?: boolean;
   description: string;
   title: string;
 }>;
 
-function ActionBlock({ action, children, defaultOpen = false, description, title }: ActionBlockProps) {
+function ActionBlock({ actions, children, defaultOpen = false, description, title }: ActionBlockProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
     <div className="rounded-2xl border border-white/5 bg-black/30 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <button
-          aria-expanded={isOpen}
-          className="min-w-0 flex-1 text-left"
-          onClick={() => setIsOpen((current) => !current)}
-          type="button"
-        >
-          <span className="flex items-center gap-2">
-            <span
-              className={[
-                "grid h-5 w-5 place-items-center rounded-full border border-white/10 text-[11px] text-slate-400 transition",
-                isOpen ? "rotate-90 bg-white/5 text-white" : "bg-black/20"
-              ].join(" ")}
-            >
-              {">"}
-            </span>
-            <span className="truncate text-sm font-semibold text-white">{title}</span>
+      <button
+        aria-expanded={isOpen}
+        className="w-full text-left"
+        onClick={() => setIsOpen((current) => !current)}
+        type="button"
+      >
+        <span className="flex items-start gap-3">
+          <span
+            className={[
+              "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-white/10 text-[11px] text-slate-400 transition",
+              isOpen ? "rotate-90 bg-white/5 text-white" : "bg-black/20"
+            ].join(" ")}
+          >
+            {">"}
           </span>
-          <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
-        </button>
-        {action}
-      </div>
-      {isOpen ? <div className="mt-3 space-y-3">{children}</div> : null}
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold leading-5 text-white">{title}</span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">{description}</span>
+          </span>
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="mt-4 space-y-3 border-t border-white/5 pt-4">
+          {children}
+          {actions ? <div className="flex flex-wrap gap-2 pt-1">{actions}</div> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
