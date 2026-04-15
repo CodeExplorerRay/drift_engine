@@ -50,6 +50,7 @@ const tabs: { id: Tab; label: string }[] = [
 ];
 
 type TabCounts = Record<Tab, number>;
+const INITIAL_LOADED_AT = new Date(0).toISOString();
 
 const initialData: DashboardData = {
   health: {
@@ -73,7 +74,7 @@ const initialData: DashboardData = {
     can_execute: false
   },
   errors: {},
-  loaded_at: new Date(0).toISOString()
+  loaded_at: INITIAL_LOADED_AT
 };
 
 function splitCsv(value: string): string[] | null {
@@ -125,6 +126,67 @@ function riskTone(score: number | null): "danger" | "warning" | "good" | "info" 
   return "good";
 }
 
+function describeSidebarStatus({
+  activityNotice,
+  baselines,
+  errors,
+  hasLoadedDashboard,
+  latestReport,
+  loading,
+  partialScan
+}: {
+  activityNotice: string | null;
+  baselines: number;
+  errors: number;
+  hasLoadedDashboard: boolean;
+  latestReport: DriftReport | null;
+  loading: boolean;
+  partialScan: boolean;
+}): { detail: string; headline: string } {
+  if (loading && !hasLoadedDashboard) {
+    return {
+      headline: "Awaiting first API response",
+      detail: "The console has not received live baselines, reports, or integrations yet."
+    };
+  }
+  if (loading) {
+    return {
+      headline: "Refreshing live data",
+      detail: "Previously loaded data is still visible while the next refresh completes."
+    };
+  }
+  if (errors > 0) {
+    return {
+      headline: "Dashboard data is degraded",
+      detail: `${errors} section${errors === 1 ? "" : "s"} failed to load. Empty tables may not mean clean state.`
+    };
+  }
+  if (partialScan && latestReport) {
+    return {
+      headline: "Latest scan is partial",
+      detail:
+        latestReport.integrity_warnings[0] ??
+        "Collector failures mean the selected report is not fully authoritative."
+    };
+  }
+  if (latestReport) {
+    return {
+      headline: "Latest scan is ready",
+      detail: activityNotice ?? `Report ${shortId(latestReport.id, 16)} is available for review.`
+    };
+  }
+  if (baselines > 0) {
+    return {
+      headline: "Ready to run a scan",
+      detail: activityNotice ?? "A baseline exists. Run drift detection to compare live state."
+    };
+  }
+  return {
+    headline: "No baseline captured yet",
+    detail: activityNotice ?? "Capture current state before the console can produce drift evidence."
+  };
+}
+
 function scanIsPartial(report: DriftReport | null): boolean {
   return report?.scan_completeness === "partial";
 }
@@ -157,7 +219,7 @@ function App() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("findings");
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState("Loading dashboard");
+  const [activityNotice, setActivityNotice] = useState<string | null>(null);
   const [baselineName, setBaselineName] = useState("prod-platform");
   const [baselineVersion, setBaselineVersion] = useState("1.0.0");
   const [collectorText, setCollectorText] = useState("file,package,kubernetes");
@@ -200,6 +262,16 @@ function App() {
   const environment = data.health.details?.environment ?? null;
   const riskScore = selectedReport ? Math.round(selectedReport.risk_score) : null;
   const tabCounts = countTabs(data, selectedReport);
+  const hasLoadedDashboard = data.loaded_at !== INITIAL_LOADED_AT;
+  const sidebarStatus = describeSidebarStatus({
+    activityNotice,
+    baselines: data.baselines.length,
+    errors: dashboardErrors.length,
+    hasLoadedDashboard,
+    latestReport,
+    loading,
+    partialScan
+  });
 
   async function refresh(quiet = false) {
     setLoading(true);
@@ -210,10 +282,10 @@ function App() {
         setSelectedReportId(dashboard.reports[0].id);
       }
       if (!quiet) {
-        setNotice("Dashboard refreshed");
+        setActivityNotice("Dashboard refreshed");
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Dashboard refresh failed");
+      setActivityNotice(error instanceof Error ? error.message : "Dashboard refresh failed");
     } finally {
       setLoading(false);
     }
@@ -227,10 +299,10 @@ function App() {
     setLoading(true);
     try {
       await task();
-      setNotice(message);
+      setActivityNotice(message);
       await refresh(true);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Action failed");
+      setActivityNotice(error instanceof Error ? error.message : "Action failed");
     } finally {
       setLoading(false);
     }
@@ -249,7 +321,7 @@ function App() {
   async function onRunScan() {
     const baselineId = selectedReport?.baseline_id ?? data.baselines[0]?.id;
     if (!baselineId) {
-      setNotice("Create a baseline before running a scan");
+      setActivityNotice("Create a baseline before running a scan");
       return;
     }
     await perform("Drift scan completed", async () => {
@@ -413,7 +485,8 @@ function App() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               Status
             </p>
-            <p className="mt-2 text-sm font-semibold text-white">{notice}</p>
+            <p className="mt-2 text-sm font-semibold text-white">{sidebarStatus.headline}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{sidebarStatus.detail}</p>
             <p className="mt-2 text-xs leading-5 text-slate-400">
               API {data.health.status} · Storage {data.health.details?.storage_backend ?? "unknown"}
             </p>
