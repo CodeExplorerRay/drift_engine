@@ -227,6 +227,7 @@ function App() {
   const [data, setData] = useState<DashboardData>(initialData);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("findings");
+  const [highlightEvidence, setHighlightEvidence] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activityNotice, setActivityNotice] = useState<string | null>(null);
   const [baselineName, setBaselineName] = useState("prod-platform");
@@ -322,6 +323,16 @@ function App() {
   useEffect(() => {
     void refresh(true);
   }, []);
+
+  useEffect(() => {
+    if (!highlightEvidence) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setHighlightEvidence(false);
+    }, 1400);
+    return () => window.clearTimeout(timeoutId);
+  }, [highlightEvidence]);
 
   async function perform(message: string, task: () => Promise<unknown>) {
     setLoading(true);
@@ -452,6 +463,10 @@ function App() {
 
   function openEvidenceTab(tab: Tab) {
     setActiveTab(tab);
+    setHighlightEvidence(false);
+    window.requestAnimationFrame(() => {
+      setHighlightEvidence(true);
+    });
     scrollToDashboardSection("evidence-tabs");
   }
 
@@ -651,6 +666,7 @@ function App() {
               data={data}
               errors={data.errors}
               executionLabel={executionLabel}
+              highlightEvidence={highlightEvidence}
               loading={loading}
               remediationCapability={data.remediationCapability}
               selectedReport={selectedReport}
@@ -733,6 +749,7 @@ function EvidenceTabs({
   data,
   errors,
   executionLabel,
+  highlightEvidence,
   loading,
   remediationCapability,
   selectedReport,
@@ -749,6 +766,7 @@ function EvidenceTabs({
   data: DashboardData;
   errors: Partial<Record<DashboardSection, string>>;
   executionLabel: string;
+  highlightEvidence: boolean;
   loading: boolean;
   remediationCapability: RemediationCapability;
   selectedReport: DriftReport | null;
@@ -765,7 +783,13 @@ function EvidenceTabs({
   const generatedAt = selectedReport?.generated_at ?? null;
 
   return (
-    <Card className="overflow-hidden scroll-mt-28" id="evidence-tabs">
+    <Card
+      className={[
+        "overflow-hidden scroll-mt-28",
+        highlightEvidence ? "evidence-panel-highlight" : ""
+      ].join(" ")}
+      id="evidence-tabs"
+    >
       <div className="border-b border-white/5 px-5 pt-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
