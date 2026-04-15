@@ -88,6 +88,7 @@ export function FindingsTable({
 export function ReportsTable({
   canExecuteRemediation,
   error,
+  executeDisabledReason,
   executionLabel,
   loading,
   reports,
@@ -98,6 +99,7 @@ export function ReportsTable({
 }: {
   canExecuteRemediation: boolean;
   error: string | null;
+  executeDisabledReason: string | null;
   executionLabel: string;
   loading: boolean;
   reports: DriftReport[];
@@ -113,8 +115,12 @@ export function ReportsTable({
     return <EmptyState message="No drift reports yet. Run a scan to populate report history." />;
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-left text-sm">
+    <div className="space-y-3">
+      {!canExecuteRemediation && executeDisabledReason ? (
+        <p className="text-xs leading-5 text-slate-500">{executeDisabledReason}</p>
+      ) : null}
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
         <thead>
           <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
             <th className="py-3 pr-4 font-semibold">Report</th>
@@ -164,7 +170,8 @@ export function ReportsTable({
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
   );
 }

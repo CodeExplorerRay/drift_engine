@@ -13,14 +13,18 @@ type QuickActionsProps = {
   canExecute: boolean;
   canPlan: boolean;
   canRunScan: boolean;
+  captureBaselineDisabledReason: string | null;
   collectorText: string;
+  createJobDisabledReason: string | null;
   jobInterval: string;
   jobName: string;
   kubernetesStatus: string;
   loading: boolean;
   namespaces: string;
   pendingApprovals: number;
+  remediationDisabledReason: string | null;
   remediationCapability: RemediationCapability;
+  runScanDisabledReason: string | null;
   scanAutoRemediate: boolean;
   executionLabel: string;
   onBaselineNameChange: (value: string) => void;
@@ -48,14 +52,18 @@ export function QuickActions({
   canExecute,
   canPlan,
   canRunScan,
+  captureBaselineDisabledReason,
   collectorText,
+  createJobDisabledReason,
   jobInterval,
   jobName,
   kubernetesStatus,
   loading,
   namespaces,
   pendingApprovals,
+  remediationDisabledReason,
   remediationCapability,
+  runScanDisabledReason,
   scanAutoRemediate,
   executionLabel,
   onBaselineNameChange,
@@ -87,6 +95,7 @@ export function QuickActions({
               Run scan
             </Button>
           }
+          actionHint={!canRunScan ? runScanDisabledReason : null}
           defaultOpen
           description={baselines.length ? `Using ${collectorText}` : "Capture a baseline first"}
           title="Run drift scan"
@@ -114,6 +123,7 @@ export function QuickActions({
               Capture baseline
             </Button>
           }
+          actionHint={!canCaptureBaseline ? captureBaselineDisabledReason : null}
           description={`${baselines.length} baseline${baselines.length === 1 ? "" : "s"} stored`}
           title="Capture current state"
         >
@@ -132,6 +142,7 @@ export function QuickActions({
               </Button>
             </>
           }
+          actionHint={remediationDisabledReason}
           defaultOpen={pendingApprovals > 0}
           description={
             pendingApprovals
@@ -174,6 +185,7 @@ export function QuickActions({
               Create job
             </Button>
           }
+          actionHint={!canCreateJob ? createJobDisabledReason : null}
           description="Create a recurring scan from the current inputs"
           title="Schedule scans"
         >
@@ -186,13 +198,21 @@ export function QuickActions({
 }
 
 type ActionBlockProps = PropsWithChildren<{
+  actionHint?: string | null;
   actions?: ReactNode;
   defaultOpen?: boolean;
   description: string;
   title: string;
 }>;
 
-function ActionBlock({ actions, children, defaultOpen = false, description, title }: ActionBlockProps) {
+function ActionBlock({
+  actionHint,
+  actions,
+  children,
+  defaultOpen = false,
+  description,
+  title
+}: ActionBlockProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
@@ -221,7 +241,12 @@ function ActionBlock({ actions, children, defaultOpen = false, description, titl
       {isOpen ? (
         <div className="mt-4 space-y-3 border-t border-white/5 pt-4">
           {children}
-          {actions ? <div className="flex flex-wrap gap-2 pt-1">{actions}</div> : null}
+          {actions || actionHint ? (
+            <div className="space-y-2 pt-1">
+              {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+              {actionHint ? <p className="text-xs leading-5 text-slate-500">{actionHint}</p> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -214,6 +214,10 @@ function selectMostUrgentFinding(report: DriftReport | null): DriftFinding | nul
   return [...trustedFindings].sort((left, right) => right.risk_score - left.risk_score)[0];
 }
 
+function firstReason(...reasons: Array<string | null>): string | null {
+  return reasons.find((reason): reason is string => Boolean(reason)) ?? null;
+}
+
 function scrollToDashboardSection(sectionId: string) {
   if (typeof window === "undefined") {
     return;
@@ -262,6 +266,36 @@ function App() {
   const hasValidCollectorSelection = (collectorNames?.length ?? 0) <= 20;
   const parsedJobInterval = Number(jobInterval.trim());
   const hasValidJobInterval = Number.isInteger(parsedJobInterval) && parsedJobInterval >= 1;
+  const loadingDisabledReason = loading ? "Wait for the current dashboard action to finish." : null;
+  const collectorLimitReason = !hasValidCollectorSelection ? "Use 20 collectors or fewer per request." : null;
+  const baselineRequiredReason = !selectedBaselineId ? "Capture a baseline first." : null;
+  const reportRequiredReason = !selectedReport?.id ? "Run or select a report first." : null;
+  const executorUnavailableReason = !data.remediationCapability.can_execute
+    ? "Current executor cannot execute approved remediation."
+    : null;
+  const runScanDisabledReason = firstReason(
+    loadingDisabledReason,
+    baselineRequiredReason,
+    collectorLimitReason
+  );
+  const captureBaselineDisabledReason = firstReason(
+    loadingDisabledReason,
+    !trimmedBaselineName ? "Enter a baseline name." : null,
+    collectorLimitReason
+  );
+  const createJobDisabledReason = firstReason(
+    loadingDisabledReason,
+    baselineRequiredReason,
+    !trimmedJobName ? "Enter a job name." : null,
+    collectorLimitReason,
+    !hasValidJobInterval ? "Enter a whole-number interval in seconds." : null
+  );
+  const planRemediationDisabledReason = firstReason(loadingDisabledReason, reportRequiredReason);
+  const executeRemediationDisabledReason = firstReason(
+    loadingDisabledReason,
+    reportRequiredReason,
+    executorUnavailableReason
+  );
   const canCaptureBaseline = !loading && trimmedBaselineName.length > 0 && hasValidCollectorSelection;
   const canRunScan = !loading && Boolean(selectedBaselineId) && hasValidCollectorSelection;
   const canCreateJob =
@@ -273,6 +307,14 @@ function App() {
   const canPlanRemediation = !loading && Boolean(selectedReport?.id);
   const canExecuteRemediation =
     !loading && Boolean(selectedReport?.id) && data.remediationCapability.can_execute;
+  const remediationActionHint =
+    !canPlanRemediation && planRemediationDisabledReason
+      ? planRemediationDisabledReason
+      : !canExecuteRemediation && executeRemediationDisabledReason
+        ? canPlanRemediation
+          ? `Planning is available, but execution is blocked. ${executeRemediationDisabledReason}`
+          : executeRemediationDisabledReason
+        : null;
   const executionLabel = data.remediationCapability.simulation_only
     ? "Simulate execution"
     : "Execute approved";
@@ -572,6 +614,7 @@ function App() {
 
         <main className="min-w-0 px-4 py-4 sm:px-6 lg:px-8">
           <TopStatusBar
+            runScanDisabledReason={runScanDisabledReason}
             environment={environment}
             health={data.health.status}
             lastScan={latestReport?.generated_at ?? null}
@@ -641,6 +684,10 @@ function App() {
                   canExecute={canExecuteRemediation}
                   canPlan={canPlanRemediation}
                   canRunScan={canRunScan}
+                  captureBaselineDisabledReason={captureBaselineDisabledReason}
+                  createJobDisabledReason={createJobDisabledReason}
+                  remediationDisabledReason={remediationActionHint}
+                  runScanDisabledReason={runScanDisabledReason}
                   scanAutoRemediate={scanAutoRemediate}
                   executionLabel={executionLabel}
                   onBaselineNameChange={setBaselineName}
@@ -665,6 +712,7 @@ function App() {
               activeTab={activeTab}
               data={data}
               errors={data.errors}
+              executeDisabledReason={!loading ? executeRemediationDisabledReason : null}
               executionLabel={executionLabel}
               highlightEvidence={highlightEvidence}
               loading={loading}
@@ -748,6 +796,7 @@ function EvidenceTabs({
   activeTab,
   data,
   errors,
+  executeDisabledReason,
   executionLabel,
   highlightEvidence,
   loading,
@@ -765,6 +814,7 @@ function EvidenceTabs({
   activeTab: Tab;
   data: DashboardData;
   errors: Partial<Record<DashboardSection, string>>;
+  executeDisabledReason: string | null;
   executionLabel: string;
   highlightEvidence: boolean;
   loading: boolean;
@@ -857,6 +907,7 @@ function EvidenceTabs({
         {activeTab === "reports" ? (
           <ReportsTable
             error={errorFor(errors, "reports")}
+            executeDisabledReason={executeDisabledReason}
             executionLabel={executionLabel}
             canExecuteRemediation={remediationCapability.can_execute}
             loading={loading}

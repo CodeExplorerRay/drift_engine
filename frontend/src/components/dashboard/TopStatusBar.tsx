@@ -13,6 +13,7 @@ type TopStatusBarProps = {
   partialScan: boolean;
   posture: string;
   riskScore: number | null;
+  runScanDisabledReason: string | null;
 };
 
 export function TopStatusBar({
@@ -25,7 +26,8 @@ export function TopStatusBar({
   onRunScan,
   partialScan,
   posture,
-  riskScore
+  riskScore,
+  runScanDisabledReason
 }: TopStatusBarProps) {
   const postureTone =
     posture === "Critical" ? "danger" : posture === "Warning" ? "warning" : posture === "Stable" ? "good" : "info";
@@ -46,24 +48,31 @@ export function TopStatusBar({
             {riskScore === null ? "No report selected" : `Risk ${riskScore}`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge tone={toneForStatus(health)}>{health}</Badge>
-          {partialScan ? <Badge tone="warning">Partial scan</Badge> : null}
-          <span className="hidden text-sm text-slate-400 xl:inline">
-            Last scan {relativeTime(lastScan)}
-          </span>
-          <a
-            className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"
-            href="/docs"
-          >
-            API docs
-          </a>
-          <Button disabled={loading} onClick={onRefresh} variant="ghost">
-            {loading ? "Refreshing" : "Refresh"}
-          </Button>
-          <Button disabled={!canRunScan} onClick={onRunScan} variant="primary">
-            Run Scan
-          </Button>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <Badge tone={toneForStatus(health)}>{health}</Badge>
+            {partialScan ? <Badge tone="warning">Partial scan</Badge> : null}
+            <span className="hidden text-sm text-slate-400 xl:inline">
+              Last scan {relativeTime(lastScan)}
+            </span>
+            <a
+              className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"
+              href="/docs"
+            >
+              API docs
+            </a>
+            <Button disabled={loading} onClick={onRefresh} variant="ghost">
+              {loading ? "Refreshing" : "Refresh"}
+            </Button>
+            <Button disabled={!canRunScan} onClick={onRunScan} variant="primary">
+              Run Scan
+            </Button>
+          </div>
+          {!canRunScan && runScanDisabledReason ? (
+            <p className="max-w-[24rem] text-xs leading-5 text-slate-500 sm:text-right">
+              {runScanDisabledReason}
+            </p>
+          ) : null}
         </div>
       </div>
     </header>
