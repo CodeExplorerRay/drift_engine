@@ -3,13 +3,27 @@ import type {
   Baseline,
   Collector,
   DashboardData,
+  DashboardSection,
   DriftReport,
   HealthResponse,
   Integration,
   KubernetesCheck,
+  RemediationCapability,
   RemediationAction,
   ScheduledJob
 } from "./types";
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly path: string,
+    readonly correlationId: string | null = null
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
@@ -26,36 +40,86 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       typeof body === "object" && body !== null
         ? body.detail || body.error || JSON.stringify(body)
         : response.statusText;
-    throw new Error(String(detail));
+    const correlationId =
+      typeof body === "object" && body !== null && "correlation_id" in body
+        ? String(body.correlation_id)
+        : null;
+    throw new ApiError(String(detail), response.status, path, correlationId);
   }
   return body as T;
 }
 
-async function optional<T>(path: string, fallback: T): Promise<T> {
+async function loadSection<T>(
+  section: DashboardSection,
+  path: string,
+  fallback: T
+): Promise<{ data: T; error: Partial<Record<DashboardSection, string>> }> {
   try {
-    return await request<T>(path);
-  } catch {
-    return fallback;
+    return { data: await request<T>(path), error: {} };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "failed to load";
+    return { data: fallback, error: { [section]: message } };
   }
 }
 
 export async function loadDashboard(): Promise<DashboardData> {
-  const [health, collectors, integrations, baselines, reports, jobs, actions, audit] =
+  const [
+    health,
+    collectors,
+    integrations,
+    baselines,
+    reports,
+    jobs,
+    actions,
+    audit,
+    remediationCapability
+  ] =
     await Promise.all([
-      optional<HealthResponse>("/health/ready", {
+      loadSection<HealthResponse>("health", "/health/ready", {
         status: "not_ready",
         service: "system-drift-engine",
         version: "unknown"
       }),
-      optional<Collector[]>("/collectors", []),
-      optional<Integration[]>("/integrations", []),
-      optional<Baseline[]>("/baselines", []),
-      optional<DriftReport[]>("/drifts?limit=50", []),
-      optional<ScheduledJob[]>("/jobs", []),
-      optional<RemediationAction[]>("/remediation/actions", []),
-      optional<AuditEvent[]>("/audit?limit=50", [])
+      loadSection<Collector[]>("collectors", "/collectors", []),
+      loadSection<Integration[]>("integrations", "/integrations", []),
+      loadSection<Baseline[]>("baselines", "/baselines", []),
+      loadSection<DriftReport[]>("reports", "/drifts?limit=50", []),
+      loadSection<ScheduledJob[]>("jobs", "/jobs?limit=100", []),
+      loadSection<RemediationAction[]>("actions", "/remediation/actions", []),
+      loadSection<AuditEvent[]>("audit", "/audit?limit=50", []),
+      loadSection<RemediationCapability>("remediationCapability", "/remediation/capability", {
+        enabled: false,
+        dry_run: true,
+        executor_mode: "unknown",
+        real_execution_available: false,
+        simulation_only: true,
+        can_execute: false
+      })
     ]);
-  return { health, collectors, integrations, baselines, reports, jobs, actions, audit };
+  const errors = {
+    ...health.error,
+    ...collectors.error,
+    ...integrations.error,
+    ...baselines.error,
+    ...reports.error,
+    ...jobs.error,
+    ...actions.error,
+    ...audit.error,
+    ...remediationCapability.error
+  };
+  return {
+    health: health.data,
+    collectors: collectors.data,
+    integrations: integrations.data,
+    baselines: baselines.data,
+    reports: reports.data,
+    jobs: jobs.data,
+    actions: actions.data,
+    audit: audit.data,
+    remediationCapability: remediationCapability.data,
+    errors,
+    loaded_at: new Date().toISOString()
+  };
 }
 
 export function captureBaseline(payload: {

@@ -1,6 +1,6 @@
 import { useState, type PropsWithChildren, type ReactNode } from "react";
 
-import type { Baseline } from "../../types";
+import type { Baseline, RemediationCapability } from "../../types";
 import { Button } from "../Button";
 import { Card, SectionHeader } from "../Card";
 
@@ -15,7 +15,9 @@ type QuickActionsProps = {
   loading: boolean;
   namespaces: string;
   pendingApprovals: number;
+  remediationCapability: RemediationCapability;
   scanAutoRemediate: boolean;
+  executionLabel: string;
   onBaselineNameChange: (value: string) => void;
   onBaselineVersionChange: (value: string) => void;
   onCaptureBaseline: () => void;
@@ -43,7 +45,9 @@ export function QuickActions({
   loading,
   namespaces,
   pendingApprovals,
+  remediationCapability,
   scanAutoRemediate,
+  executionLabel,
   onBaselineNameChange,
   onBaselineVersionChange,
   onCaptureBaseline,
@@ -113,8 +117,8 @@ export function QuickActions({
               <Button disabled={loading} onClick={onPlan}>
                 Plan
               </Button>
-              <Button disabled={loading} onClick={onExecute} variant="warning">
-                Execute approved
+              <Button disabled={loading || !remediationCapability.can_execute} onClick={onExecute} variant="warning">
+                {executionLabel}
               </Button>
             </div>
           }
@@ -126,6 +130,12 @@ export function QuickActions({
           }
           title="Remediation"
         >
+          <p className="rounded-xl border border-white/5 bg-black/20 px-3 py-2 text-xs leading-5 text-slate-400">
+            Executor {remediationCapability.executor_mode}.{" "}
+            {remediationCapability.simulation_only
+              ? "Only simulated remediation is available."
+              : "Real execution is available."}
+          </p>
           <Button className="w-full" disabled={loading} onClick={onOpenRemediation} variant="ghost">
             Open remediation queue
           </Button>

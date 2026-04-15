@@ -44,6 +44,11 @@ class CollectorStatus(StrEnum):
     FAILED = "failed"
 
 
+class ScanCompleteness(StrEnum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+
+
 class ResourceType(StrEnum):
     FILE = "file"
     PACKAGE = "package"
@@ -194,6 +199,8 @@ class DriftFinding:
     policy_violations: list[str] = field(default_factory=list)
     detected_at: dt.datetime = field(default_factory=utcnow)
     fingerprint: str = ""
+    trusted: bool = True
+    integrity_notes: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.risk_score:
@@ -227,6 +234,8 @@ class DriftFinding:
             "policy_violations": self.policy_violations,
             "detected_at": self.detected_at.isoformat(),
             "fingerprint": self.fingerprint,
+            "trusted": self.trusted,
+            "integrity_notes": self.integrity_notes,
         }
 
 
@@ -249,6 +258,9 @@ class DriftReport:
     policy_results: list[dict[str, Any]] = field(default_factory=list)
     risk_score: float = 0.0
     summary: DriftSummary = field(default_factory=DriftSummary)
+    scan_completeness: ScanCompleteness = ScanCompleteness.COMPLETE
+    collector_results: list[dict[str, Any]] = field(default_factory=list)
+    integrity_warnings: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.summary.total == 0:
@@ -295,6 +307,9 @@ class DriftReport:
                 "modified": self.summary.modified,
                 "by_severity": self.summary.by_severity,
             },
+            "scan_completeness": self.scan_completeness.value,
+            "collector_results": self.collector_results,
+            "integrity_warnings": self.integrity_warnings,
         }
 
 
@@ -306,6 +321,15 @@ class CollectorResult:
     duration_ms: float = 0.0
     errors: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "collector_name": self.collector_name,
+            "status": self.status.value,
+            "duration_ms": self.duration_ms,
+            "errors": self.errors,
+            "metadata": self.metadata,
+        }
 
 
 @dataclass(slots=True)

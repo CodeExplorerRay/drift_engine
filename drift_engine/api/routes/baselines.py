@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from drift_engine.api.dependencies import request_engine as get_engine
 from drift_engine.api.schemas.baseline import (
@@ -77,8 +79,8 @@ async def create_from_current(
 
 @router.get("", response_model=list[BaselineResponse])
 async def list_baselines(
-    limit: int = 100,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
     engine: DriftEngine = ENGINE_DEP,
 ) -> list[BaselineResponse]:
     baselines = await engine.baselines.list(limit=limit, offset=offset)

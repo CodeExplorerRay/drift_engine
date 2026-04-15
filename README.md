@@ -1,6 +1,6 @@
 # System Drift Engine
 
-System Drift Engine continuously collects infrastructure state, compares it to signed baselines, evaluates policy, scores operational and security risk, emits events, and can execute gated remediation.
+System Drift Engine continuously collects infrastructure state, compares it to signed baselines, evaluates policy, scores operational and security risk, emits events, and plans gated remediation.
 
 ## Quick Start
 
@@ -25,7 +25,7 @@ Copy-Item .env.example .env
 ```
 
 The local `.env` file is ignored by git. It is for development-only defaults such as `local-dev-key`, local ports, and optional integration toggles.
-Local remediation execution is enabled in dry-run mode so the dashboard workflow can be tested without changing the host. Keep non-dry-run remediation disabled until runbooks are reviewed.
+Local auth fallback is only enabled when `DRIFT_ALLOW_DEV_AUTH=true`; staging and production refuse startup without configured API keys or service accounts. Local remediation uses the noop executor in dry-run/simulation mode, so the dashboard workflow can be tested without changing the host. Keep non-dry-run remediation disabled until a real runbook executor is configured and reviewed.
 
 ## Docker
 
@@ -40,6 +40,7 @@ Useful local links:
 - API docs: `http://localhost:8080/docs`
 - Liveness: `http://localhost:8080/health/live`
 - Readiness: `http://localhost:8080/health/ready`
+- Metrics: `http://localhost:8080/metrics` from localhost/internal networks only unless explicitly exposed
 
 The Docker profile uses `DRIFT_STORAGE_BACKEND=postgres` and stores baselines, snapshots, drift reports, and custom policies in Postgres. `DRIFT_AUTO_CREATE_SCHEMA=true` is enabled for local Docker convenience; production deployments should run Alembic migrations explicitly instead.
 
@@ -107,7 +108,7 @@ The engine is intentionally modular:
 - Baselines define desired state and can be signed to detect tampering.
 - The drift detector produces stable fingerprints for added, removed, and modified resources.
 - The policy engine maps drift to compliance violations and risk.
-- Remediation plans are generated separately from execution and can require approval.
+- Remediation plans are generated separately from execution and can require approval; noop execution is reported as simulation only.
 - Scheduled scan jobs, audit events, and remediation approvals are durable and API-visible.
 - Storage adapters support in-memory testing, Postgres, Redis, and Elasticsearch.
 - Events, metrics, traces, correlation IDs, and structured logging are first-class.
@@ -121,3 +122,5 @@ Production service accounts are JSON records with explicit scopes. Use `X-API-Ke
 ```
 
 Available write scopes include `baseline:write`, `scan:execute`, `policy:write`, `jobs:write`, `remediation:plan`, `remediation:approve`, `remediation:execute`, and `audit:read`.
+
+Staging and production require `DRIFT_AUTH_REQUIRED=true` plus `DRIFT_SERVICE_ACCOUNTS` or `DRIFT_API_KEYS`. `DRIFT_ALLOW_DEV_AUTH=true` is rejected outside local development.

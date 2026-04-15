@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from drift_engine.api.dependencies import request_engine as get_engine
 from drift_engine.api.security import Scopes, require_scope
@@ -13,8 +15,8 @@ AUDIT_READ = Depends(require_scope(Scopes.AUDIT_READ))
 
 @router.get("", dependencies=[AUDIT_READ])
 async def list_audit_events(
-    limit: int = 100,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
     engine: DriftEngine = ENGINE_DEP,
 ) -> list[dict[str, object]]:
     if engine.audit_repository is None:

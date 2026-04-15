@@ -105,6 +105,10 @@ class RemediationRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def claim_execution(self, *, report_id: str, idempotency_key: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_action(self, action_id: str) -> RemediationAction | None:
         raise NotImplementedError
 
@@ -229,11 +233,25 @@ class InMemoryRemediationRepository(RemediationRepository):
     def __init__(self) -> None:
         self._actions: dict[str, RemediationAction] = {}
         self._action_report: dict[str, str] = {}
+        self._execution_claims: set[tuple[str, str]] = set()
 
     async def save_plan(self, plan: RemediationPlan) -> None:
+        existing = {
+            (self._action_report.get(action.id), action.fingerprint)
+            for action in self._actions.values()
+        }
         for action in plan.actions:
+            if (plan.report_id, action.fingerprint) in existing:
+                continue
             self._actions[action.id] = action
             self._action_report[action.id] = plan.report_id
+
+    async def claim_execution(self, *, report_id: str, idempotency_key: str) -> bool:
+        key = (report_id, idempotency_key)
+        if key in self._execution_claims:
+            return False
+        self._execution_claims.add(key)
+        return True
 
     async def get_action(self, action_id: str) -> RemediationAction | None:
         return self._actions.get(action_id)

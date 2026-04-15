@@ -9,6 +9,7 @@ type TopStatusBarProps = {
   loading: boolean;
   onRefresh: () => void;
   onRunScan: () => void;
+  partialScan: boolean;
   posture: string;
   riskScore: number | null;
 };
@@ -20,6 +21,7 @@ export function TopStatusBar({
   loading,
   onRefresh,
   onRunScan,
+  partialScan,
   posture,
   riskScore
 }: TopStatusBarProps) {
@@ -44,6 +46,7 @@ export function TopStatusBar({
         </div>
         <div className="flex items-center gap-2">
           <Badge tone={toneForStatus(health)}>{health}</Badge>
+          {partialScan ? <Badge tone="warning">Partial scan</Badge> : null}
           <span className="hidden text-sm text-slate-400 xl:inline">
             Last scan {relativeTime(lastScan)}
           </span>

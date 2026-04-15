@@ -47,6 +47,17 @@ export function PriorityQueue({
         : null;
 
   const rows = [
+    report?.scan_completeness === "partial"
+      ? {
+          title: "Selected report is partial",
+          detail:
+            report.integrity_warnings[0] ??
+            "Collector failures mean this scan should not be treated as authoritative.",
+          tone: "warning" as const,
+          action: "Open report",
+          onClick: onOpenFindings
+        }
+      : null,
     highestFindingTitle && finding
       ? {
           title: highestFindingTitle,

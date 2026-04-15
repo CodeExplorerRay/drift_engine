@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from drift_engine.api.dependencies import request_engine as get_engine
 from drift_engine.api.schemas.jobs import (
@@ -24,11 +25,14 @@ SCAN_EXECUTE = Depends(require_scope(Scopes.SCAN_EXECUTE))
 @router.get("", response_model=list[ScheduledJobResponse])
 async def list_jobs(
     include_disabled: bool = True,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
     engine: DriftEngine = ENGINE_DEP,
 ) -> list[ScheduledJobResponse]:
     if engine.job_repository is None:
         raise HTTPException(status_code=501, detail="job repository is not configured")
     jobs = await engine.job_repository.list_jobs(include_disabled=include_disabled)
+    jobs = jobs[offset : offset + limit]
     return [ScheduledJobResponse.from_domain(job) for job in jobs]
 
 
@@ -66,7 +70,7 @@ async def create_job(
 @router.get("/runs", response_model=list[JobRunResponse])
 async def list_runs(
     job_id: str | None = None,
-    limit: int = 100,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
     engine: DriftEngine = ENGINE_DEP,
 ) -> list[JobRunResponse]:
     if engine.job_repository is None:

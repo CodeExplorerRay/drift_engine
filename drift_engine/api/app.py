@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import ipaddress
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse, Response
 
 from config.logging_config import configure_logging
-from config.settings import get_settings
+from config.settings import Settings, get_settings
 from drift_engine import __version__
 from drift_engine.api.dependencies import build_runtime_engine
 from drift_engine.api.middleware.auth import ApiKeyAuthMiddleware
@@ -30,6 +31,33 @@ from drift_engine.api.routes import (
 )
 from drift_engine.core.scheduler import DriftJobScheduler
 from drift_engine.telemetry.tracing import configure_tracing
+
+
+def _cors_origins(settings: Settings) -> list[str]:
+    configured = settings.cors_origin_values
+    if configured:
+        return configured
+    return ["*"] if settings.environment in {"local", "test"} else []
+
+
+def _metrics_request_allowed(request: Request, settings: Settings) -> bool:
+    if settings.metrics_public:
+        return True
+    client_host = request.client.host if request.client else ""
+    if not client_host:
+        return False
+    try:
+        client_ip = ipaddress.ip_address(client_host)
+    except ValueError:
+        return False
+    trusted_networks = [
+        ipaddress.ip_network("127.0.0.0/8"),
+        ipaddress.ip_network("::1/128"),
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.168.0.0/16"),
+    ]
+    return any(client_ip in network for network in trusted_networks)
 
 
 @asynccontextmanager
@@ -81,7 +109,7 @@ def create_app() -> FastAPI:
     app.add_middleware(ApiKeyAuthMiddleware, settings=settings)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if not settings.is_production else [],
+        allow_origins=_cors_origins(settings),
         allow_credentials=False,
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
@@ -101,7 +129,9 @@ def create_app() -> FastAPI:
     app.include_router(audit.router)
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics() -> Response:
+    async def metrics(request: Request) -> Response:
+        if not _metrics_request_allowed(request, settings):
+            raise HTTPException(status_code=403, detail="metrics endpoint is not publicly exposed")
         try:
             from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
         except ImportError:

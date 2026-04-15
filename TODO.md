@@ -88,3 +88,14 @@ This list keeps the System Drift Engine hardening work ordered and auditable.
 - [ ] Capture a Kubernetes baseline from the live cluster.
 - [ ] Apply `examples/kubernetes/drift.yaml`.
 - [ ] Run a drift scan and record the actual detected deployment, service, and RBAC findings.
+
+## Phase 12: Production Safety Corrections
+
+- [x] Make local development auth fallback require `DRIFT_ALLOW_DEV_AUTH=true`.
+- [x] Refuse startup in staging/production without configured service accounts or API keys.
+- [x] Remove `/metrics` from unauthenticated bypasses and restrict metrics access by environment/network.
+- [x] Expose remediation executor capability and label noop execution as simulation-only.
+- [x] Mark partial collector scans as non-authoritative and flag untrusted removed-resource findings.
+- [x] Preserve dashboard section load failures instead of converting them into empty data.
+- [x] Bound list endpoints, baseline payload sizes, collector scopes, and remediation execution idempotency.
+- [x] Split dashboard table rendering out of `App.tsx` and move backend runtime composition helpers out of dependencies.

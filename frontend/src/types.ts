@@ -60,6 +60,8 @@ export type DriftFinding = {
   policy_violations: string[];
   detected_at: string;
   fingerprint: string;
+  trusted: boolean;
+  integrity_notes: string[];
 };
 
 export type DriftReport = {
@@ -77,6 +79,15 @@ export type DriftReport = {
     modified?: number;
     by_severity?: Record<string, number>;
   };
+  scan_completeness: "complete" | "partial";
+  collector_results: {
+    collector_name: string;
+    status: string;
+    duration_ms: number;
+    errors: string[];
+    metadata?: Record<string, unknown>;
+  }[];
+  integrity_warnings: string[];
 };
 
 export type ScheduledJob = {
@@ -110,6 +121,8 @@ export type RemediationAction = {
   dry_run: boolean;
   output: string;
   error: string;
+  executor_mode: string;
+  simulated: boolean;
   created_at: string;
   executed_at: string | null;
 };
@@ -139,6 +152,26 @@ export type KubernetesCheck = {
   }[];
 };
 
+export type RemediationCapability = {
+  enabled: boolean;
+  dry_run: boolean;
+  executor_mode: string;
+  real_execution_available: boolean;
+  simulation_only: boolean;
+  can_execute: boolean;
+};
+
+export type DashboardSection =
+  | "health"
+  | "collectors"
+  | "integrations"
+  | "baselines"
+  | "reports"
+  | "jobs"
+  | "actions"
+  | "audit"
+  | "remediationCapability";
+
 export type DashboardData = {
   health: HealthResponse;
   collectors: Collector[];
@@ -148,4 +181,7 @@ export type DashboardData = {
   jobs: ScheduledJob[];
   actions: RemediationAction[];
   audit: AuditEvent[];
+  remediationCapability: RemediationCapability;
+  errors: Partial<Record<DashboardSection, string>>;
+  loaded_at: string;
 };

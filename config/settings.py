@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     api_keys: SecretStr | None = None
     service_accounts: SecretStr | None = None
     auth_required: bool = True
+    allow_dev_auth: bool = False
     rate_limit_per_minute: int = 600
+    cors_origins: str = ""
 
     baseline_signing_secret: SecretStr | None = None
     collector_timeout_seconds: float = 30.0
@@ -61,10 +63,23 @@ class Settings(BaseSettings):
 
     otel_exporter_otlp_endpoint: AnyHttpUrl | None = None
     metrics_enabled: bool = True
+    metrics_public: bool = False
 
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def is_strict_environment(self) -> bool:
+        return self.environment in {"staging", "production"}
+
+    @property
+    def local_dev_auth_enabled(self) -> bool:
+        return self.environment == "local" and self.allow_dev_auth
+
+    @property
+    def cors_origin_values(self) -> list[str]:
+        return self._csv_values(self.cors_origins)
 
     @property
     def api_key_values(self) -> list[str]:
@@ -137,14 +152,22 @@ class Settings(BaseSettings):
         return [item.strip() for item in raw.split(",") if item.strip()]
 
     def validate_runtime_security(self) -> None:
-        if not self.is_production:
+        if self.allow_dev_auth and self.environment != "local":
+            raise ValueError(
+                "DRIFT_ALLOW_DEV_AUTH=true is only allowed when DRIFT_ENVIRONMENT=local"
+            )
+        if not self.is_strict_environment:
             return
         if not self.auth_required:
-            raise ValueError("DRIFT_AUTH_REQUIRED=false is not allowed in production")
+            raise ValueError("DRIFT_AUTH_REQUIRED=false is not allowed in staging or production")
         if not self.service_account_values:
-            raise ValueError("DRIFT_SERVICE_ACCOUNTS or DRIFT_API_KEYS is required in production")
+            raise ValueError(
+                "DRIFT_SERVICE_ACCOUNTS or DRIFT_API_KEYS is required in staging and production"
+            )
         if self.baseline_signing_secret is None:
-            raise ValueError("DRIFT_BASELINE_SIGNING_SECRET is required in production")
+            raise ValueError(
+                "DRIFT_BASELINE_SIGNING_SECRET is required in staging and production"
+            )
 
 
 @lru_cache(maxsize=1)

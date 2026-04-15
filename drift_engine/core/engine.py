@@ -8,7 +8,16 @@ from drift_engine.collectors.registry import CollectorRegistry
 from drift_engine.core.baseline import BaselineManager
 from drift_engine.core.drift_detector import DriftDetector
 from drift_engine.core.exceptions import BaselineNotFoundError
-from drift_engine.core.models import Baseline, EngineRunResult, StateSnapshot
+from drift_engine.core.models import (
+    Baseline,
+    CollectorResult,
+    CollectorStatus,
+    DriftReport,
+    DriftType,
+    EngineRunResult,
+    ScanCompleteness,
+    StateSnapshot,
+)
 from drift_engine.events.bus import EventBus
 from drift_engine.events.models import Event, EventType
 from drift_engine.policies.engine import PolicyEngine
@@ -143,6 +152,7 @@ class DriftEngine:
             )
             report.policy_results = [policy_result.to_document()]
             self.policies.apply_risk(report, policy_result)
+            self._apply_scan_integrity(report, collector_results)
 
             for finding in report.findings:
                 self.metrics.record_finding(finding.severity.value, finding.drift_type.value)
@@ -176,3 +186,36 @@ class DriftEngine:
                 collector_results=collector_results,
                 remediations=remediations,
             )
+
+    @staticmethod
+    def _apply_scan_integrity(
+        report: DriftReport, collector_results: list[CollectorResult]
+    ) -> None:
+        degraded_collectors = [
+            result
+            for result in collector_results
+            if result.status in {CollectorStatus.FAILED, CollectorStatus.PARTIAL}
+        ]
+        report.collector_results = [result.to_document() for result in collector_results]
+        if not degraded_collectors:
+            report.scan_completeness = ScanCompleteness.COMPLETE
+            return
+
+        report.scan_completeness = ScanCompleteness.PARTIAL
+        report.integrity_warnings = [
+            (
+                "scan is partial; one or more collectors failed or returned incomplete data, "
+                "so removed-resource findings may be untrusted"
+            )
+        ]
+        for finding in report.findings:
+            if finding.drift_type != DriftType.REMOVED:
+                continue
+            finding.trusted = False
+            finding.integrity_notes.append(
+                "removed finding came from a partial scan and is not authoritative"
+            )
+            finding.risk_score = 0.0
+        trusted_findings = [finding for finding in report.findings if finding.trusted]
+        report.summary = report.build_summary(report.findings)
+        report.risk_score = report.aggregate_risk(trusted_findings)

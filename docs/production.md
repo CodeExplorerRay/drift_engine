@@ -6,10 +6,12 @@ This guide describes a hardened production deployment for System Drift Engine.
 
 - Run with `DRIFT_ENVIRONMENT=production`.
 - Keep `DRIFT_AUTH_REQUIRED=true`.
+- Keep `DRIFT_ALLOW_DEV_AUTH=false`; the app rejects this flag outside local development.
 - Set `DRIFT_SERVICE_ACCOUNTS` to scoped service account JSON.
 - Set `DRIFT_BASELINE_SIGNING_SECRET` to a strong random value.
 - Set `DRIFT_AUTO_CREATE_SCHEMA=false` and run Alembic migrations before rollout.
 - Keep `DRIFT_REMEDIATION_DRY_RUN=true` until runbooks are reviewed and approved.
+- Keep `DRIFT_METRICS_PUBLIC=false` unless metrics are protected by network policy.
 
 Example service accounts:
 
@@ -83,7 +85,7 @@ uvicorn drift_engine.api.app:create_app --factory --host 0.0.0.0 --port 8080
 
 - `GET /health/live` verifies the process is alive.
 - `GET /health/ready` verifies storage connectivity and schema availability.
-- `GET /metrics` exposes Prometheus metrics when `DRIFT_METRICS_ENABLED=true`.
+- `GET /metrics` exposes Prometheus metrics when `DRIFT_METRICS_ENABLED=true`, but requests are still authenticated and restricted to localhost or private/internal networks unless `DRIFT_METRICS_PUBLIC=true`.
 - `GET /audit` provides durable write and security event history for authorized callers.
 
 ## Backups
@@ -94,7 +96,7 @@ Back up Postgres before every deployment and on a fixed schedule:
 pg_dump --format=custom --file drift-$(date +%Y%m%d%H%M%S).dump "$DATABASE_URL"
 ```
 
-Minimum tables to protect are baselines, snapshots, drift reports, policies, audit events, scheduled jobs, job runs, remediation plans, remediation actions, and scheduler locks. Store backups in encrypted object storage with lifecycle retention and test restore into a non-production database regularly.
+Minimum tables to protect are baselines, snapshots, drift reports, policies, audit events, scheduled jobs, job runs, remediation plans, remediation actions, remediation executions, and scheduler locks. Store backups in encrypted object storage with lifecycle retention and test restore into a non-production database regularly.
 
 Restore example:
 
@@ -132,9 +134,10 @@ Create scheduled jobs through `POST /jobs`. Multiple replicas are safe because j
 
 Recommended production flow:
 
+1. Confirm capability with `GET /remediation/capability`.
 1. `POST /remediation/reports/{report_id}/plan`
 2. Review generated actions and runbook IDs.
 3. `POST /remediation/actions/{action_id}/approve`
 4. `POST /remediation/reports/{report_id}/execute` with `Idempotency-Key`.
 
-Non-dry-run remediation requires an explicit approver identity. Raw shell commands are not accepted; execution is limited to named runbook templates.
+Non-dry-run remediation requires an explicit approver identity and a real executor. If the backend is using the noop executor, execution responses are simulation-only and skipped. Raw shell commands are not accepted; real execution must be limited to named runbook templates.

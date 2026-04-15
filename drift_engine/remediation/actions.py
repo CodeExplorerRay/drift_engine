@@ -11,6 +11,7 @@ from drift_engine.core.models import new_id, utcnow
 
 class RemediationStatus(StrEnum):
     PLANNED = "planned"
+    RUNNING = "running"
     WAITING_APPROVAL = "waiting_approval"
     APPROVED = "approved"
     SKIPPED = "skipped"
@@ -37,6 +38,8 @@ class RemediationAction:
     dry_run: bool = True
     output: str = ""
     error: str = ""
+    executor_mode: str = "unknown"
+    simulated: bool = False
     created_at: dt.datetime = field(default_factory=utcnow)
     executed_at: dt.datetime | None = None
 
@@ -61,22 +64,30 @@ class RemediationAction:
             "dry_run": self.dry_run,
             "output": self.output,
             "error": self.error,
+            "executor_mode": self.executor_mode,
+            "simulated": self.simulated,
             "created_at": self.created_at.isoformat(),
             "executed_at": self.executed_at.isoformat() if self.executed_at else None,
         }
 
 
 class ActionExecutor(Protocol):
+    mode: str
+    supports_real_execution: bool
+
     async def execute(self, action: RemediationAction) -> RemediationAction:
         """Execute a remediation action."""
 
 
 class NoopExecutor:
+    mode: str = "noop"
+    supports_real_execution: bool = False
+
     async def execute(self, action: RemediationAction) -> RemediationAction:
-        action.status = RemediationStatus.SKIPPED if action.dry_run else RemediationStatus.SUCCEEDED
-        action.output = (
-            "dry-run noop remediation" if action.dry_run else "noop remediation executed"
-        )
+        action.status = RemediationStatus.SKIPPED
+        action.executor_mode = self.mode
+        action.simulated = True
+        action.output = "noop executor simulation only; no infrastructure changes were made"
         action.executed_at = utcnow()
         return action
 
@@ -93,12 +104,16 @@ class RunbookActionExecutor:
         runbooks: dict[str, list[str]] | None = None,
         timeout_seconds: float = 30.0,
     ) -> None:
+        self.mode: str = "runbook"
+        self.supports_real_execution: bool = True
         self.runbooks = runbooks or {"restart_service": ["systemctl", "restart", "{service_name}"]}
         self.timeout_seconds = timeout_seconds
 
     async def execute(self, action: RemediationAction) -> RemediationAction:
+        action.executor_mode = self.mode
         if action.dry_run:
             action.status = RemediationStatus.SKIPPED
+            action.simulated = True
             action.output = f"dry-run runbook: {action.runbook_id or action.strategy}"
             action.executed_at = utcnow()
             return action
@@ -127,6 +142,7 @@ class RunbookActionExecutor:
 
         action.output = stdout.decode("utf-8", errors="replace")
         action.error = stderr.decode("utf-8", errors="replace")
+        action.simulated = False
         action.status = (
             RemediationStatus.SUCCEEDED if process.returncode == 0 else RemediationStatus.FAILED
         )

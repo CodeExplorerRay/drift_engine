@@ -21,8 +21,11 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
     from drift_engine.api.app import create_app
     from drift_engine.api.dependencies import get_engine, get_metrics
 
+    monkeypatch.setenv("DRIFT_ENVIRONMENT", "local")
+    monkeypatch.setenv("DRIFT_AUTH_REQUIRED", "false")
     monkeypatch.setenv("DRIFT_REMEDIATION_ENABLED", "true")
     monkeypatch.setenv("DRIFT_REMEDIATION_DRY_RUN", "true")
+    monkeypatch.setenv("DRIFT_ALLOW_DEV_AUTH", "true")
     get_settings.cache_clear()
     get_engine.cache_clear()
     get_metrics.cache_clear()
@@ -59,7 +62,7 @@ def test_health_and_baseline_create(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Audit trail" in dashboard.text
     assert "Create job" in dashboard.text
     assert "Approve action" in dashboard.text
-    assert "Execute approved" in dashboard.text
+    assert "Execute approved" in dashboard.text or "Simulate execution" in dashboard.text
     assert 'href="/favicon.ico"' in dashboard.text
 
     favicon = client.get("/favicon.ico")
@@ -195,6 +198,21 @@ def test_dashboard_asset_route_recovers_stale_hashed_asset(
     assert "console.log('live build');" in asset.text
 
 
+def test_staging_refuses_startup_without_auth_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DRIFT_ENVIRONMENT", "staging")
+    monkeypatch.setenv("DRIFT_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("DRIFT_API_KEYS", "")
+    monkeypatch.setenv("DRIFT_SERVICE_ACCOUNTS", "")
+    monkeypatch.setenv("DRIFT_ALLOW_DEV_AUTH", "false")
+
+    from config.settings import get_settings
+
+    get_settings.cache_clear()
+
+    with pytest.raises(ValueError, match="required in staging and production"):
+        get_settings().validate_runtime_security()
+
+
 def test_drift_scan_repairs_legacy_unsigned_baseline_in_local_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -208,6 +226,7 @@ def test_drift_scan_repairs_legacy_unsigned_baseline_in_local_mode(
     monkeypatch.setenv("DRIFT_STORAGE_BACKEND", "memory")
     monkeypatch.setenv("DRIFT_BASELINE_SIGNING_SECRET", "local-test-secret")
     monkeypatch.setenv("DRIFT_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("DRIFT_ALLOW_DEV_AUTH", "true")
     monkeypatch.setenv("DRIFT_METRICS_ENABLED", "false")
     get_settings.cache_clear()
     get_engine.cache_clear()

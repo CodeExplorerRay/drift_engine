@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from drift_engine.api.dependencies import request_engine as get_engine
 from drift_engine.api.security import Scopes, audit_action, request_principal, require_scope
 from drift_engine.core.engine import DriftEngine
-from drift_engine.remediation.actions import RemediationStatus
 from drift_engine.remediation.strategies import RemediationPlan
 
 router = APIRouter(prefix="/remediation", tags=["remediation"])
@@ -20,6 +20,20 @@ REMEDIATION_EXECUTE = Depends(require_scope(Scopes.REMEDIATION_EXECUTE))
 
 class RemediationApprovalRequest(BaseModel):
     expires_in_seconds: int = Field(default=3600, ge=60, le=86_400)
+
+
+@router.get("/capability")
+async def remediation_capability(engine: DriftEngine = ENGINE_DEP) -> dict[str, object]:
+    if engine.remediation is None:
+        return {
+            "enabled": False,
+            "dry_run": True,
+            "executor_mode": "none",
+            "real_execution_available": False,
+            "simulation_only": True,
+            "can_execute": False,
+        }
+    return engine.remediation.capability()
 
 
 @router.post("/reports/{report_id}/plan", dependencies=[REMEDIATION_PLAN])
@@ -58,7 +72,7 @@ async def plan_remediation(
 @router.get("/actions")
 async def list_actions(
     report_id: str | None = None,
-    limit: int = 100,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
     engine: DriftEngine = ENGINE_DEP,
 ) -> list[dict[str, object]]:
     if engine.remediation_repository is None:
@@ -100,27 +114,29 @@ async def approve_action(
 async def execute_remediation(
     request: Request,
     report_id: str,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     engine: DriftEngine = ENGINE_DEP,
 ) -> list[dict[str, object]]:
+    if not idempotency_key:
+        raise HTTPException(status_code=400, detail="Idempotency-Key header is required")
     report = await engine.reports.get(report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="drift report not found")
     if engine.remediation is None:
         raise HTTPException(status_code=400, detail="remediation engine is not configured")
     if engine.remediation_repository is not None:
+        claim_acquired = await engine.remediation_repository.claim_execution(
+            report_id=report_id,
+            idempotency_key=idempotency_key,
+        )
         actions = await engine.remediation_repository.list_actions(report_id=report_id)
-        if idempotency_key and any(
-            action.idempotency_key == idempotency_key
-            and action.status
-            in {
-                RemediationStatus.SKIPPED,
-                RemediationStatus.SUCCEEDED,
-                RemediationStatus.FAILED,
-            }
-            for action in actions
-        ):
+        if not claim_acquired and actions:
             return [action.to_document() for action in actions]
+        if not claim_acquired:
+            raise HTTPException(
+                status_code=409,
+                detail="duplicate remediation execution request is already in progress",
+            )
         if actions:
             plan = RemediationPlan(report_id=report_id, actions=actions)
         else:

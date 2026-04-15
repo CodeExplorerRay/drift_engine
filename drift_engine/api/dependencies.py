@@ -6,16 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.requests import Request
 
 from config.settings import Settings, get_settings
+from drift_engine.api.composition import (
+    build_baseline_manager,
+    build_event_bus,
+    build_policy_engine,
+    build_remediation_engine,
+)
 from drift_engine.collectors.registry import CollectorRegistry
-from drift_engine.core.baseline import BaselineManager
 from drift_engine.core.engine import DriftEngine
-from drift_engine.events.bus import EventBus
-from drift_engine.events.handlers import log_event
-from drift_engine.policies.engine import PolicyEngine
 from drift_engine.policies.models import PolicyRule
-from drift_engine.policies.rules import default_policy_rules
-from drift_engine.remediation.approval import ApprovalPolicy
-from drift_engine.remediation.engine import RemediationEngine
 from drift_engine.storage.base import (
     AuditRepository,
     BaselineRepository,
@@ -115,35 +114,20 @@ def build_engine_from_repositories(
     remediation_repository: RemediationRepository | None,
     persisted_policies: list[PolicyRule],
 ) -> DriftEngine:
-    events = EventBus()
-    events.subscribe(None, log_event)
-    secret = (
-        settings.baseline_signing_secret.get_secret_value()
-        if settings.baseline_signing_secret
-        else None
-    )
-    policies = PolicyEngine([*default_policy_rules(), *persisted_policies])
+    events = build_event_bus()
+    policies = build_policy_engine(persisted_policies)
     return DriftEngine(
         collectors=CollectorRegistry.default(settings),
         baselines=baselines,
         snapshots=snapshots,
         reports=reports,
-        baseline_manager=BaselineManager(
-            signing_secret=secret,
-            allow_legacy_unsigned_repair=settings.environment in {"local", "test"},
-        ),
+        baseline_manager=build_baseline_manager(settings),
         policies=policies,
         policy_repository=policy_repository,
         audit_repository=audit_repository,
         job_repository=job_repository,
         remediation_repository=remediation_repository,
-        remediation=RemediationEngine(
-            approval=ApprovalPolicy(
-                auto_approve_below_risk=settings.remediation_auto_approve_below_risk,
-            ),
-            enabled=settings.remediation_enabled,
-            dry_run=settings.remediation_dry_run,
-        ),
+        remediation=build_remediation_engine(settings),
         events=events,
         metrics=get_metrics(),
     )

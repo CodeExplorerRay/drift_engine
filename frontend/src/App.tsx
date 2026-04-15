@@ -11,24 +11,30 @@ import {
   runDriftScan,
   runJobNow
 } from "./api";
-import { Badge, toneForSeverity, toneForStatus } from "./components/Badge";
-import { Button } from "./components/Button";
-import { Card, SectionHeader } from "./components/Card";
+import { Badge } from "./components/Badge";
+import { Card } from "./components/Card";
 import { IncidentSpotlight } from "./components/dashboard/IncidentSpotlight";
 import { PostureSummary } from "./components/dashboard/PostureSummary";
 import { PriorityQueue } from "./components/dashboard/PriorityQueue";
 import { QuickActions } from "./components/dashboard/QuickActions";
+import {
+  AuditList,
+  BaselinesTable,
+  FindingsTable,
+  IntegrationsGrid,
+  JobsTable,
+  RemediationTable,
+  ReportsTable
+} from "./components/dashboard/Tables";
 import { TopStatusBar } from "./components/dashboard/TopStatusBar";
 import { findingTotal, formatTime, relativeTime, shortId } from "./components/dashboard/shared";
-import { EmptyState } from "./components/EmptyState";
 import type {
-  Baseline,
   DashboardData,
+  DashboardSection,
   DriftFinding,
   DriftReport,
   Integration,
-  RemediationAction,
-  ScheduledJob
+  RemediationCapability
 } from "./types";
 
 type Tab = "findings" | "reports" | "remediation" | "baselines" | "jobs" | "integrations" | "audit";
@@ -57,7 +63,17 @@ const initialData: DashboardData = {
   reports: [],
   jobs: [],
   actions: [],
-  audit: []
+  audit: [],
+  remediationCapability: {
+    enabled: false,
+    dry_run: true,
+    executor_mode: "unknown",
+    real_execution_available: false,
+    simulation_only: true,
+    can_execute: false
+  },
+  errors: {},
+  loaded_at: new Date(0).toISOString()
 };
 
 function splitCsv(value: string): string[] | null {
@@ -69,14 +85,7 @@ function splitCsv(value: string): string[] | null {
 }
 
 function isSevere(finding: DriftFinding): boolean {
-  return ["critical", "high"].includes(finding.severity.toLowerCase());
-}
-
-function reportForAction(action: RemediationAction, reports: DriftReport[]): string | null {
-  const report = reports.find((item) =>
-    item.findings.some((finding) => finding.id === action.finding_id)
-  );
-  return report?.id ?? null;
+  return finding.trusted !== false && ["critical", "high"].includes(finding.severity.toLowerCase());
 }
 
 function isPast(value: string | null | undefined): boolean {
@@ -116,11 +125,31 @@ function riskTone(score: number | null): "danger" | "warning" | "good" | "info" 
   return "good";
 }
 
+function scanIsPartial(report: DriftReport | null): boolean {
+  return report?.scan_completeness === "partial";
+}
+
+function errorFor(
+  errors: Partial<Record<DashboardSection, string>>,
+  ...sections: DashboardSection[]
+): string | null {
+  for (const section of sections) {
+    if (errors[section]) {
+      return errors[section] ?? null;
+    }
+  }
+  return null;
+}
+
 function selectMostUrgentFinding(report: DriftReport | null): DriftFinding | null {
   if (!report || report.findings.length === 0) {
     return null;
   }
-  return [...report.findings].sort((left, right) => right.risk_score - left.risk_score)[0];
+  const trustedFindings = report.findings.filter((finding) => finding.trusted !== false);
+  if (!trustedFindings.length) {
+    return null;
+  }
+  return [...trustedFindings].sort((left, right) => right.risk_score - left.risk_score)[0];
 }
 
 function App() {
@@ -151,10 +180,19 @@ function App() {
     (integration) => integration.enabled && !["ready", "ok"].includes(integration.status)
   );
   const overdueJobs = data.jobs.filter((job) => job.enabled && isPast(job.next_run_at));
+  const dashboardErrors = Object.entries(data.errors);
+  const partialScan = scanIsPartial(selectedReport);
+  const executionLabel = data.remediationCapability.simulation_only
+    ? "Simulate execution"
+    : "Execute approved";
   const posture =
     criticalFindings > 0
       ? "Critical"
-      : pendingApprovals.length > 0 || unhealthyIntegrations.length > 0 || overdueJobs.length > 0
+      : pendingApprovals.length > 0 ||
+          unhealthyIntegrations.length > 0 ||
+          overdueJobs.length > 0 ||
+          partialScan ||
+          dashboardErrors.length > 0
         ? "Warning"
         : latestReport
           ? "Stable"
@@ -275,10 +313,15 @@ function App() {
       setNotice("Select a report before executing remediation");
       return;
     }
-    await perform("Approved remediation executed", async () => {
-      await executeRemediation(reportId);
-      setActiveTab("remediation");
-    });
+    await perform(
+      data.remediationCapability.simulation_only
+        ? "Remediation simulation completed"
+        : "Approved remediation executed",
+      async () => {
+        await executeRemediation(reportId);
+        setActiveTab("remediation");
+      }
+    );
   }
 
   return (
@@ -386,6 +429,7 @@ function App() {
             health={data.health.status}
             lastScan={latestReport?.generated_at ?? null}
             loading={loading}
+            partialScan={partialScan}
             onRefresh={() => refresh()}
             onRunScan={onRunScan}
             posture={posture}
@@ -393,6 +437,13 @@ function App() {
           />
 
           <div className="mx-auto max-w-[1480px] space-y-6" id="overview">
+            {dashboardErrors.length || partialScan ? (
+              <DashboardIntegrityBanner
+                errors={data.errors}
+                partialReport={partialScan ? selectedReport : null}
+              />
+            ) : null}
+
             <PostureSummary
               criticalFindings={criticalFindings}
               enabledIntegrations={enabledIntegrations.length}
@@ -436,7 +487,9 @@ function App() {
                   loading={loading}
                   namespaces={namespaces}
                   pendingApprovals={pendingApprovals.length}
+                  remediationCapability={data.remediationCapability}
                   scanAutoRemediate={scanAutoRemediate}
+                  executionLabel={executionLabel}
                   onBaselineNameChange={setBaselineName}
                   onBaselineVersionChange={setBaselineVersion}
                   onCaptureBaseline={onCaptureBaseline}
@@ -458,6 +511,9 @@ function App() {
             <EvidenceTabs
               activeTab={activeTab}
               data={data}
+              errors={data.errors}
+              executionLabel={executionLabel}
+              remediationCapability={data.remediationCapability}
               selectedReport={selectedReport}
               selectedReportId={selectedReport?.id ?? null}
               setActiveTab={setActiveTab}
@@ -486,9 +542,59 @@ function App() {
   );
 }
 
+function DashboardIntegrityBanner({
+  errors,
+  partialReport
+}: {
+  errors: Partial<Record<DashboardSection, string>>;
+  partialReport: DriftReport | null;
+}) {
+  const entries = Object.entries(errors).filter(
+    (entry): entry is [DashboardSection, string] => typeof entry[1] === "string"
+  );
+  return (
+    <Card className="border-amber-400/20 bg-amber-950/20 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Badge tone="warning">Dashboard degraded</Badge>
+          <p className="mt-3 text-sm font-semibold text-white">
+            Some data is incomplete or failed to load.
+          </p>
+          <p className="mt-1 text-sm leading-6 text-slate-400">
+            Empty sections below may mean an API failure, not a clean system state.
+          </p>
+        </div>
+        {partialReport ? (
+          <Badge tone="warning">{`Partial scan ${shortId(partialReport.id, 16)}`}</Badge>
+        ) : null}
+      </div>
+      {entries.length ? (
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {entries.map(([section, message]) => (
+            <div className="rounded-xl border border-white/5 bg-black/20 px-3 py-2" key={section}>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">
+                {section}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">{message}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {partialReport?.integrity_warnings.length ? (
+        <p className="mt-3 text-xs leading-5 text-amber-100/80">
+          {partialReport.integrity_warnings.join(" ")}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
 function EvidenceTabs({
   activeTab,
   data,
+  errors,
+  executionLabel,
+  remediationCapability,
   selectedReport,
   selectedReportId,
   setActiveTab,
@@ -501,6 +607,9 @@ function EvidenceTabs({
 }: {
   activeTab: Tab;
   data: DashboardData;
+  errors: Partial<Record<DashboardSection, string>>;
+  executionLabel: string;
+  remediationCapability: RemediationCapability;
   selectedReport: DriftReport | null;
   selectedReportId: string | null;
   setActiveTab: (tab: Tab) => void;
@@ -538,6 +647,9 @@ function EvidenceTabs({
             <Badge tone={riskTone(selectedRisk)}>
               {selectedRisk === null ? "No Risk" : `Risk ${selectedRisk}`}
             </Badge>
+            {selectedReport?.scan_completeness === "partial" ? (
+              <Badge tone="warning">Partial scan</Badge>
+            ) : null}
             <Badge tone={tabCounts.findings ? "warning" : "good"}>
               {`${tabCounts.findings} Findings`}
             </Badge>
@@ -574,9 +686,13 @@ function EvidenceTabs({
         </div>
       </div>
       <div className="p-5">
-        {activeTab === "findings" ? <FindingsTable report={selectedReport} /> : null}
+        {activeTab === "findings" ? (
+          <FindingsTable error={errorFor(errors, "reports")} report={selectedReport} />
+        ) : null}
         {activeTab === "reports" ? (
           <ReportsTable
+            error={errorFor(errors, "reports")}
+            executionLabel={executionLabel}
             reports={data.reports}
             selectedReportId={selectedReportId}
             setSelectedReportId={setSelectedReportId}
@@ -587,305 +703,26 @@ function EvidenceTabs({
         {activeTab === "remediation" ? (
           <RemediationTable
             actions={data.actions}
+            error={errorFor(errors, "actions", "remediationCapability")}
+            executionLabel={executionLabel}
+            remediationCapability={remediationCapability}
             reports={data.reports}
             onApprove={onApprove}
             onExecute={onExecute}
           />
         ) : null}
-        {activeTab === "baselines" ? <BaselinesTable baselines={data.baselines} /> : null}
-        {activeTab === "jobs" ? <JobsTable jobs={data.jobs} onRunJob={onRunJob} /> : null}
-        {activeTab === "integrations" ? <IntegrationsGrid data={data} /> : null}
-        {activeTab === "audit" ? <AuditList data={data} /> : null}
+        {activeTab === "baselines" ? (
+          <BaselinesTable baselines={data.baselines} error={errorFor(errors, "baselines")} />
+        ) : null}
+        {activeTab === "jobs" ? (
+          <JobsTable error={errorFor(errors, "jobs")} jobs={data.jobs} onRunJob={onRunJob} />
+        ) : null}
+        {activeTab === "integrations" ? (
+          <IntegrationsGrid data={data} error={errorFor(errors, "integrations")} />
+        ) : null}
+        {activeTab === "audit" ? <AuditList data={data} error={errorFor(errors, "audit")} /> : null}
       </div>
     </Card>
-  );
-}
-
-function FindingsTable({ report }: { report: DriftReport | null }) {
-  const findings = report?.findings ?? [];
-  if (!findings.length) {
-    return <EmptyState message="No findings for the selected report." />;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
-            <th className="py-3 pr-4 font-semibold">Resource</th>
-            <th className="px-4 py-3 font-semibold">Severity</th>
-            <th className="px-4 py-3 font-semibold">Type</th>
-            <th className="px-4 py-3 font-semibold">Path</th>
-            <th className="py-3 pl-4 font-semibold">Status</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {findings.map((finding) => (
-            <tr className="align-top" key={finding.id}>
-              <td className="max-w-md py-4 pr-4">
-                <p className="font-medium text-white">{shortId(finding.resource_key, 82)}</p>
-                <p className="mt-1 font-mono text-xs text-slate-500">{shortId(finding.fingerprint, 32)}</p>
-              </td>
-              <td className="px-4 py-4">
-                <Badge tone={toneForSeverity(finding.severity)}>{finding.severity}</Badge>
-              </td>
-              <td className="px-4 py-4 text-slate-300">
-                {finding.drift_type} · {finding.resource_type}
-              </td>
-              <td className="px-4 py-4 font-mono text-xs text-slate-400">{finding.path || "/"}</td>
-              <td className="py-4 pl-4">
-                <Badge tone={toneForStatus(finding.status)}>{finding.status}</Badge>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ReportsTable({
-  reports,
-  selectedReportId,
-  setSelectedReportId,
-  onExecute,
-  onPlan
-}: {
-  reports: DriftReport[];
-  selectedReportId: string | null;
-  setSelectedReportId: (reportId: string) => void;
-  onExecute: (reportId: string | null) => void;
-  onPlan: (reportId: string | null) => void;
-}) {
-  if (!reports.length) {
-    return <EmptyState message="No drift reports yet. Run a scan to populate report history." />;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
-            <th className="py-3 pr-4 font-semibold">Report</th>
-            <th className="px-4 py-3 font-semibold">Risk</th>
-            <th className="px-4 py-3 font-semibold">Findings</th>
-            <th className="px-4 py-3 font-semibold">Generated</th>
-            <th className="py-3 pl-4 font-semibold">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {reports.map((report) => (
-            <tr key={report.id}>
-              <td className="py-4 pr-4">
-                <p className="font-medium text-white">{shortId(report.id, 18)}</p>
-                <p className="mt-1 font-mono text-xs text-slate-500">
-                  baseline {shortId(report.baseline_id, 22)}
-                </p>
-              </td>
-              <td className="px-4 py-4">
-                <Badge tone={report.risk_score >= 70 ? "danger" : "warning"}>
-                  {String(Math.round(report.risk_score))}
-                </Badge>
-              </td>
-              <td className="px-4 py-4 text-slate-300">{findingTotal(report)}</td>
-              <td className="px-4 py-4 text-slate-300">{formatTime(report.generated_at)}</td>
-              <td className="py-4 pl-4">
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setSelectedReportId(report.id)} variant="ghost">
-                    {report.id === selectedReportId ? "Selected" : "Select"}
-                  </Button>
-                  <Button onClick={() => onPlan(report.id)}>Plan</Button>
-                  <Button onClick={() => onExecute(report.id)} variant="warning">
-                    Execute approved
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function RemediationTable({
-  actions,
-  reports,
-  onApprove,
-  onExecute
-}: {
-  actions: RemediationAction[];
-  reports: DriftReport[];
-  onApprove: (actionId: string) => void;
-  onExecute: (reportId: string | null) => void;
-}) {
-  if (!actions.length) {
-    return <EmptyState message="No remediation plan yet. Plan remediation from a drift report first." />;
-  }
-  return (
-    <div className="grid gap-3">
-      {actions.map((action) => {
-        const reportId = reportForAction(action, reports);
-        const isApproved = ["approved", "skipped", "succeeded"].includes(action.status);
-        return (
-          <div
-            className="grid gap-4 rounded-2xl border border-white/5 bg-black/20 p-4 lg:grid-cols-[1fr_auto]"
-            key={action.id}
-          >
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={toneForStatus(action.status)}>{action.status}</Badge>
-                <span className="text-sm font-semibold text-white">{action.strategy}</span>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{action.description}</p>
-              <p className="mt-2 text-xs text-slate-400">
-                Risk {Math.round(action.risk_score)} · Dry run {action.dry_run ? "enabled" : "off"} ·
-                Approval {action.requires_approval ? "required" : "automatic"}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button disabled={isApproved} onClick={() => onApprove(action.id)}>
-                Approve action
-              </Button>
-              <Button onClick={() => onExecute(reportId)} variant="warning">
-                Execute approved
-              </Button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function BaselinesTable({ baselines }: { baselines: Baseline[] }) {
-  if (!baselines.length) {
-    return <EmptyState message="No baselines yet. Capture one from the current collected state." />;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
-            <th className="py-3 pr-4 font-semibold">Baseline</th>
-            <th className="px-4 py-3 font-semibold">Version</th>
-            <th className="px-4 py-3 font-semibold">Resources</th>
-            <th className="px-4 py-3 font-semibold">Checksum</th>
-            <th className="py-3 pl-4 font-semibold">Created</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {baselines.map((baseline) => (
-            <tr key={baseline.id}>
-              <td className="py-4 pr-4">
-                <p className="font-medium text-white">{baseline.name}</p>
-                <p className="mt-1 font-mono text-xs text-slate-500">{shortId(baseline.id, 24)}</p>
-              </td>
-              <td className="px-4 py-4 text-slate-300">{baseline.version}</td>
-              <td className="px-4 py-4 text-slate-300">
-                {Object.keys(baseline.resources || {}).length}
-              </td>
-              <td className="px-4 py-4 font-mono text-xs text-slate-400">
-                {shortId(baseline.checksum, 28)}
-              </td>
-              <td className="py-4 pl-4 text-slate-300">{formatTime(baseline.created_at)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function JobsTable({
-  jobs,
-  onRunJob
-}: {
-  jobs: ScheduledJob[];
-  onRunJob: (jobId: string) => void;
-}) {
-  if (!jobs.length) {
-    return <EmptyState message="No scheduled jobs yet. Create one from the quick actions panel." />;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-white/5 text-xs uppercase tracking-[0.12em] text-slate-500">
-            <th className="py-3 pr-4 font-semibold">Job</th>
-            <th className="px-4 py-3 font-semibold">Interval</th>
-            <th className="px-4 py-3 font-semibold">Next run</th>
-            <th className="px-4 py-3 font-semibold">Last run</th>
-            <th className="py-3 pl-4 font-semibold">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {jobs.map((job) => (
-            <tr key={job.id}>
-              <td className="py-4 pr-4">
-                <p className="font-medium text-white">{job.name}</p>
-                <p className="mt-1 font-mono text-xs text-slate-500">{shortId(job.id, 24)}</p>
-              </td>
-              <td className="px-4 py-4 text-slate-300">{job.interval_seconds}s</td>
-              <td className="px-4 py-4 text-slate-300">{formatTime(job.next_run_at)}</td>
-              <td className="px-4 py-4 text-slate-300">{formatTime(job.last_run_at)}</td>
-              <td className="py-4 pl-4">
-                <Button onClick={() => onRunJob(job.id)}>Run now</Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function IntegrationsGrid({ data }: { data: DashboardData }) {
-  if (!data.integrations.length) {
-    return <EmptyState message="No integrations are configured." />;
-  }
-  return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {data.integrations.map((integration) => (
-        <div className="rounded-2xl border border-white/5 bg-black/20 p-4" key={integration.name}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-semibold text-white">
-                {integration.display_name || integration.name}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">{integration.collector_name}</p>
-            </div>
-            <Badge tone={toneForStatus(integration.status)}>{integration.status}</Badge>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-300">{integration.description}</p>
-          <p className="mt-3 text-xs leading-5 text-slate-400">
-            Missing: {integration.missing.length ? integration.missing.join(", ") : "None"}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AuditList({ data }: { data: DashboardData }) {
-  if (!data.audit.length) {
-    return <EmptyState message="No audit events yet." />;
-  }
-  return (
-    <div className="grid gap-3">
-      {data.audit.map((event) => (
-        <div
-          className="grid gap-3 rounded-2xl border border-white/5 bg-black/20 p-4 sm:grid-cols-[1fr_auto]"
-          key={event.id}
-        >
-          <div>
-            <p className="font-semibold text-white">{event.action}</p>
-            <p className="mt-1 text-sm text-slate-400">
-              {event.actor_id} changed {event.target_type} {shortId(event.target_id, 24)}
-            </p>
-          </div>
-          <p className="text-sm text-slate-400">{formatTime(event.created_at)}</p>
-        </div>
-      ))}
-    </div>
   );
 }
 

@@ -19,8 +19,10 @@ from drift_engine.core.models import (
     DriftStatus,
     DriftSummary,
     DriftType,
+    ScanCompleteness,
     Severity,
     StateSnapshot,
+    new_id,
 )
 from drift_engine.core.operations import AuditEvent, JobRun, ScheduledScanJob
 from drift_engine.policies.models import PolicyCondition, PolicyEffect, PolicyRule, RuleOperator
@@ -151,6 +153,16 @@ remediation_actions_table = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+remediation_executions_table = sa.Table(
+    "remediation_executions",
+    metadata,
+    sa.Column("id", sa.String(64), primary_key=True),
+    sa.Column("report_id", sa.String(64), nullable=False),
+    sa.Column("idempotency_key", sa.String(255), nullable=False),
+    sa.Column("status", sa.String(32), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 sa.Index(
     "ix_baselines_name_version",
     baselines_table.c.name,
@@ -175,6 +187,17 @@ sa.Index("ix_job_runs_job_started", job_runs_table.c.job_id, job_runs_table.c.st
 sa.Index("ix_remediation_plans_report", remediation_plans_table.c.report_id)
 sa.Index("ix_remediation_actions_report", remediation_actions_table.c.report_id)
 sa.Index("ix_remediation_actions_idempotency", remediation_actions_table.c.idempotency_key)
+sa.Index(
+    "ux_remediation_actions_report_fingerprint",
+    remediation_actions_table.c.report_id,
+    remediation_actions_table.c.fingerprint,
+    unique=True,
+)
+sa.Index(
+    "ux_remediation_executions_idempotency",
+    remediation_executions_table.c.idempotency_key,
+    unique=True,
+)
 
 
 def build_engine(database_url: str) -> AsyncEngine:
@@ -546,30 +569,58 @@ class PostgresRemediationRepository(RemediationRepository):
 
     async def save_plan(self, plan: RemediationPlan) -> None:
         now = dt.datetime.now(dt.UTC)
-        async with self.session_factory() as session:
-            async with session.begin():
-                await session.execute(
-                    sa.insert(remediation_plans_table).values(
-                        id=plan.id,
-                        report_id=plan.report_id,
-                        document=plan.to_document(),
-                        created_at=now,
-                    )
-                )
-                for action in plan.actions:
+        try:
+            async with self.session_factory() as session:
+                async with session.begin():
                     await session.execute(
-                        sa.insert(remediation_actions_table).values(
-                            id=action.id,
-                            plan_id=plan.id,
+                        sa.insert(remediation_plans_table).values(
+                            id=plan.id,
                             report_id=plan.report_id,
-                            status=action.status.value,
-                            fingerprint=action.fingerprint,
-                            idempotency_key=action.idempotency_key,
-                            document=action.to_document(),
-                            created_at=action.created_at,
-                            updated_at=now,
+                            document=plan.to_document(),
+                            created_at=now,
                         )
                     )
+                    for action in plan.actions:
+                        exists = await session.scalar(
+                            sa.select(remediation_actions_table.c.id)
+                            .where(remediation_actions_table.c.report_id == plan.report_id)
+                            .where(remediation_actions_table.c.fingerprint == action.fingerprint)
+                        )
+                        if exists:
+                            continue
+                        await session.execute(
+                            sa.insert(remediation_actions_table).values(
+                                id=action.id,
+                                plan_id=plan.id,
+                                report_id=plan.report_id,
+                                status=action.status.value,
+                                fingerprint=action.fingerprint,
+                                idempotency_key=action.idempotency_key,
+                                document=action.to_document(),
+                                created_at=action.created_at,
+                                updated_at=now,
+                            )
+                        )
+        except sa.exc.IntegrityError:
+            return
+
+    async def claim_execution(self, *, report_id: str, idempotency_key: str) -> bool:
+        now = dt.datetime.now(dt.UTC)
+        async with self.session_factory() as session:
+            try:
+                async with session.begin():
+                    await session.execute(
+                        sa.insert(remediation_executions_table).values(
+                            id=new_id("exec"),
+                            report_id=report_id,
+                            idempotency_key=idempotency_key,
+                            status="claimed",
+                            created_at=now,
+                        )
+                    )
+            except sa.exc.IntegrityError:
+                return False
+        return True
 
     async def get_action(self, action_id: str) -> RemediationAction | None:
         async with self.session_factory() as session:
@@ -633,6 +684,8 @@ def _report_from_document(document: dict[str, Any]) -> DriftReport:
                 if detected_at
                 else dt.datetime.now(dt.UTC),
                 fingerprint=item.get("fingerprint", ""),
+                trusted=bool(item.get("trusted", True)),
+                integrity_notes=item.get("integrity_notes", []),
             )
         )
     summary = document.get("summary", {})
@@ -654,6 +707,9 @@ def _report_from_document(document: dict[str, Any]) -> DriftReport:
             modified=int(summary.get("modified", 0)),
             by_severity=summary.get("by_severity", {}),
         ),
+        scan_completeness=ScanCompleteness(document.get("scan_completeness", "complete")),
+        collector_results=document.get("collector_results", []),
+        integrity_warnings=document.get("integrity_warnings", []),
     )
 
 
@@ -681,6 +737,8 @@ def _action_from_document(document: dict[str, Any]) -> RemediationAction:
         dry_run=bool(document.get("dry_run", True)),
         output=document.get("output", ""),
         error=document.get("error", ""),
+        executor_mode=document.get("executor_mode", "unknown"),
+        simulated=bool(document.get("simulated", False)),
         created_at=dt.datetime.fromisoformat(created_at)
         if created_at
         else dt.datetime.now(dt.UTC),

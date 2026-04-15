@@ -38,14 +38,23 @@ export function IncidentSpotlight({
   if (!finding) {
     return (
       <Card className="p-6">
-        <Badge tone="good">Stable</Badge>
+        <Badge tone={report.scan_completeness === "partial" ? "warning" : "good"}>
+          {report.scan_completeness === "partial" ? "Partial scan" : "Stable"}
+        </Badge>
         <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white">
-          No urgent drift in the selected report.
+          {report.scan_completeness === "partial"
+            ? "The selected report is not fully authoritative."
+            : "No urgent drift in the selected report."}
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-400">
           Report {shortId(report.id, 18)} completed at {formatTime(report.generated_at)} with risk{" "}
           {Math.round(report.risk_score)} and {findingTotal(report)} total findings.
         </p>
+        {report.integrity_warnings.length ? (
+          <p className="mt-3 text-sm leading-6 text-amber-100/80">
+            {report.integrity_warnings.join(" ")}
+          </p>
+        ) : null}
       </Card>
     );
   }
@@ -70,6 +79,7 @@ export function IncidentSpotlight({
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Badge tone={toneForSeverity(finding.severity)}>{finding.severity}</Badge>
+          {report.scan_completeness === "partial" ? <Badge tone="warning">Partial scan</Badge> : null}
           <Badge tone="warning">{`Risk ${Math.round(finding.risk_score)}`}</Badge>
           <Badge tone="info">{finding.drift_type}</Badge>
           <Badge tone="neutral">{`Baseline ${shortId(report.baseline_id, 16)}`}</Badge>

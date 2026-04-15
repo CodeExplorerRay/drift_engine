@@ -22,15 +22,29 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         if request.url.path in {"/", "/favicon.ico"} or request.url.path.startswith(
-            ("/assets", "/health", "/metrics")
+            ("/assets", "/health")
         ):
             return await call_next(request)
 
         configured_accounts = self.settings.service_account_values
-        auth_is_active = bool(configured_accounts) or self.settings.is_production
-        if not self.settings.auth_required or not auth_is_active:
+        if not self.settings.auth_required and self.settings.local_dev_auth_enabled:
             request.state.principal = AuthPrincipal.local_dev()
             return await call_next(request)
+
+        if not configured_accounts:
+            if self.settings.local_dev_auth_enabled:
+                request.state.principal = AuthPrincipal.local_dev()
+                return await call_next(request)
+            return JSONResponse(
+                {
+                    "error": "auth_not_configured",
+                    "detail": (
+                        "authentication is required; configure DRIFT_SERVICE_ACCOUNTS or "
+                        "DRIFT_API_KEYS, or set DRIFT_ALLOW_DEV_AUTH=true for local development"
+                    ),
+                },
+                status_code=503,
+            )
 
         provided = request.headers.get("X-API-Key") or ""
         for account in configured_accounts:
